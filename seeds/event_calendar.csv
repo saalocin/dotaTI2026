@@ -1,0 +1,4 @@
+period_id,label,starts_at,ends_at,lock_at
+group_stage,Group Stage (Swiss),2026-08-13T02:00:00Z,2026-08-16T23:59:00Z,2026-08-13T02:00:00Z
+elimination,Elimination Round,2026-08-17T02:00:00Z,2026-08-19T23:59:00Z,
+main_event,Main Event (Playoffs),2026-08-20T02:00:00Z,2026-08-23T23:59:00Z,

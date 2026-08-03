@@ -1,0 +1,7 @@
+bucket_id,capacity,rule,label
+4-0,1,record=4-0,Swiss 4-0
+4-1,2,record=4-1,Swiss 4-1
+elim-victor,5,elim_survived,Qualified via Elimination Round
+elim-loser,5,elim_lost,Eliminated in Elimination Round
+1-4,2,record=1-4,Swiss 1-4
+0-4,1,record=0-4,Swiss 0-4

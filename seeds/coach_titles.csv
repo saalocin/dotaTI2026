@@ -1,0 +1,17 @@
+title,side,pct,cond_type,cond_param,note
+Crimson,prefix,6,hero_tag,red,
+Cerulean,prefix,11,hero_tag,blue,
+Emerald,prefix,6,hero_tag,green,
+Royal,prefix,10,hero_tag,purple,
+Golden,prefix,8,hero_tag,yellow|brown,
+Elemental,prefix,8,hero_tag,aquatic|fiery|icy,
+Otherworldly,prefix,7,hero_tag,undead|demon|spirit,
+Heroic,prefix,9,hero_tag,caped|masked,
+the Tormented,suffix,23,tormentor_death,,any player in the game dies to a Tormentor
+the Flayed Twins Acolyte,suffix,9,fb_pre_horn,,first blood lands before the starting horn
+the Patient,suffix,23,fb_after_s,600,first blood does not happen until after 10:00
+the Underdog,suffix,6,player_loss,,applies in games the player loses
+the Decisive,suffix,24,duration_lt_s,1500,games shorter than 25:00
+the Clutch,suffix,16,deciding_game,,last possible match of a series (game 3 of Bo3 / 5 of Bo5)
+the Lucky,suffix,21,clock_ends_8,,final clock digit is 8 (seconds-digit reading; minutes reading is also ~10%)
+the Cruel,suffix,13,own_fountain_death,,unobservable in parsed data; league-constant estimate

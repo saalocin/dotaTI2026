@@ -1,0 +1,17 @@
+team_key,display_name,liquipedia_page,opendota_team_id,datdota_team_id,opendota_alt_ids,aliases,region,seed_note
+aurora,Aurora Gaming,Aurora_Gaming,9467224,9467224,,Aurora Gaming|Aurora|Aurora.1xBet,invite,
+boomboys,BoomBoys,BoomBoys,8255888,8255888,,BoomBoys|BetBoom Team|BetBoom,invite,"BetBoom rebrand mid-2026, same org & OpenDota team_id; ratings may list either name"
+falcons,Team Falcons,Team_Falcons,9247354,9247354,,Team Falcons|Falcons,invite,
+gamerlegion,GamerLegion,GamerLegion,9964962,9964962,,GamerLegion,na,
+huligani,HULIGANI,HULIGANI,10202698,10202698,9303383|10182299,HULIGANI|L1GA TEAM|L1GA,weu,"ex-L1GA TEAM (renamed); alt ids: 9303383 = L1GA era (Jan-May, 175 unit games), 10182299 = Jul re-registration; seeded id 10202698 has no matches yet — roster-majority attribution is authoritative"
+iron_wing,Iron Wing,Iron_Wing,10182357,10182357,8291895|10150413,Iron Wing|1w Team|1w|Tundra Esports,invite,"ex-Tundra roster (transferred 2026-06); Liquipedia Glicko resets on rename -> rating under-states strength; alt ids: 8291895 = Tundra era (131 unit games), 10150413 = interim May id"
+lgd,LGD Gaming,LGD_Gaming,10150538,10150538,9303484,LGD Gaming,sa,"SA roster under LGD org, NEW team_id 10150538; alt id 9303484 = same unit pre-LGD (Jan-Apr, 112 games); other legacy LGD ids are a different team"
+liquid,Team Liquid,Team_Liquid,2163,2163,,Team Liquid,invite,
+nigma,Nigma Galaxy,Nigma_Galaxy,10136357,10136357,7554697,Nigma Galaxy|Nigma Galaxy ,weu,"current id 10136357; alt id 7554697 = old registration (Jan-May, 135 unit games); OpenDota name has trailing space"
+og,OG,OG,2586976,2586976,,OG,sea,SEA-qualified roster under OG org; ~140 games under this id are the pre-2026-roster lineup — roster-majority attribution excludes them
+resilience,Team Resilience,Team_Resilience,5017210,5017210,10207984,Team Resilience,cn,alt id 10207984 = Jul re-registration seen in recent team logs
+spirit,Team Spirit,Team_Spirit,7119388,7119388,,Team Spirit|Team. Spirit,weu,OpenDota has stale alias 'Team. Spirit' — never join by name
+vici,Vici Gaming,Vici_Gaming,726228,726228,,Vici Gaming|VG,cn,
+vision,TEAM VISION,TEAM_VISION,9572001,9572001,9824702,TEAM VISION,weu,"NOT PARIVISION — distinct org; do not fuzzy-match; alt id 9824702 = May-Jul re-registration"
+xtreme,Xtreme Gaming,Xtreme_Gaming,8261500,8261500,,Xtreme Gaming,invite,
+yandex,Team Yandex,Team_Yandex,9823272,9823272,,Team Yandex,invite,

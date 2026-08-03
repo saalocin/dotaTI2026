@@ -1,0 +1,9 @@
+.env
+data/
+.claude/launch.json
+*.duckdb
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+uv.lock.bak
