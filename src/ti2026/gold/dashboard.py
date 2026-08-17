@@ -501,6 +501,15 @@ def collect(con) -> dict:
     grp_run = slates.latest_run(con, "sim_group_draws")
     n_draws = con.execute(
         "SELECT n_draws FROM gold.sim_meta WHERE run_id = ?", [grp_run]).fetchone()[0]
+    # post-groups: a fixed-entrant bracket run supersedes the chained pre-groups
+    # draws for everything main-event (champion odds, slot marginals, fantasy P2)
+    br_run = slates.latest_run(con, "sim_bracket_draws", stage="post_groups")
+    br_draws = n_draws
+    bracket_src = grp_run
+    if br_run:
+        bracket_src = br_run
+        br_draws = con.execute(
+            "SELECT n_draws FROM gold.sim_meta WHERE run_id = ?", [br_run]).fetchone()[0]
 
     # ---- teams, ordered by model strength
     rows = con.execute(
@@ -536,70 +545,110 @@ def collect(con) -> dict:
                    "out_elim": _round(1.0 - ppo - pb3), "bottom3": pb3,
                    "playoffs": ppo}
 
-    # ---- champion / reach-GF odds from the chained bracket draws
-    champion = {k: c / n_draws for k, c in con.execute(
+    # ---- champion / reach-GF odds (post-groups run when available, else chained)
+    champion = {k: c / br_draws for k, c in con.execute(
         """SELECT winner_key, count(*) FROM gold.sim_bracket_draws
-           WHERE run_id = ? AND slot_id = 'R5M1' GROUP BY 1""", [grp_run]).fetchall()}
-    reach_gf = {k: c / n_draws for k, c in con.execute(
+           WHERE run_id = ? AND slot_id = 'R5M1' GROUP BY 1""", [bracket_src]).fetchall()}
+    reach_gf = {k: c / br_draws for k, c in con.execute(
         """SELECT team_key, count(*) FROM (
                SELECT team1_key AS team_key FROM gold.sim_bracket_draws
                WHERE run_id = ? AND slot_id = 'R5M1'
                UNION ALL
                SELECT team2_key FROM gold.sim_bracket_draws
                WHERE run_id = ? AND slot_id = 'R5M1'
-           ) GROUP BY 1""", [grp_run, grp_run]).fetchall()}
+           ) GROUP BY 1""", [bracket_src, bracket_src]).fetchall()}
 
-    # ---- bracket topology + per-slot winner marginals
-    slots = [{"slot": s, "round": r, "side": side, "bo": bo, "fw": fw, "fl": fl}
-             for s, r, side, bo, fw, fl in con.execute(
+    # ---- bracket topology (+ the real fill once Liquipedia seeds it)
+    slots = [{"slot": s, "round": r, "side": side, "bo": bo, "fw": fw, "fl": fl,
+              "t1": t1, "t2": t2, "w": w}
+             for s, r, side, bo, fw, fl, t1, t2, w in con.execute(
                  "SELECT slot_id, round_no, side, best_of, feeds_winner_slot, "
-                 "feeds_loser_slot FROM pred.bracket_slots "
-                 "ORDER BY round_no, slot_id").fetchall()]
+                 "feeds_loser_slot, team1_key, team2_key, winner_key "
+                 "FROM pred.bracket_slots ORDER BY round_no, slot_id").fetchall()]
     slot_marg: dict[str, list] = {}
     for s, w, c in con.execute(
             """SELECT slot_id, winner_key, count(*) FROM gold.sim_bracket_draws
-               WHERE run_id = ? GROUP BY 1, 2 ORDER BY 1, 3 DESC""", [grp_run]).fetchall():
+               WHERE run_id = ? GROUP BY 1, 2 ORDER BY 1, 3 DESC""",
+            [bracket_src]).fetchall():
         slot_marg.setdefault(s, [])
         if len(slot_marg[s]) < 3:
-            slot_marg[s].append([w, _round(c / n_draws, 3)])
+            slot_marg[s].append([w, _round(c / br_draws, 3)])
 
-    # ---- series exposure per period (fantasy context)
+    # ---- series exposure per period (fantasy context; post-groups run = real P2)
     exposure: dict[str, dict] = {}
     for k, p, e in con.execute(
             """SELECT team_key, period_id, avg(k) FROM (
                    SELECT draw_id, team_key, period_id, count(*) AS k
                    FROM gold.sim_fantasy_paths WHERE run_id = ? GROUP BY 1, 2, 3)
-               GROUP BY 1, 2""", [grp_run]).fetchall():
+               GROUP BY 1, 2""", [br_run or grp_run]).fetchall():
         exposure.setdefault(k, {})[p] = _round(e, 2)
 
-    # ---- group slates across risk temperatures (honest re-optimization)
+    # ---- group slates. Pre-lock: honest re-optimization across risk temperatures.
+    # Post-lock: the pre-lock slates are FROZEN in seeds/locked_group_slates.json —
+    # re-optimizing a resolved Swiss on a model that has since trained on those very
+    # games would leak outcome knowledge into the "consensus" and flatter the score.
     g_teams, M, buckets, caps = slates.load_group_matrices(con, grp_run)
-    M_search = M[:, :, :SEARCH_DRAWS] if M.shape[2] > SEARCH_DRAWS else M
-    base_assign, _, _, _ = slates.group_core(M_search, caps, slates.GROUP_TABLE,
-                                             restarts=20, seed=7)
     g_slates = []
-    for stop in RISK_STOPS:
-        if stop["contra"]:
-            assign = contrarian(M_search, caps, base_assign, stop["contra"],
-                                slates.GROUP_TABLE)
-        elif stop["tail"] is None:
-            assign = base_assign
-        else:
-            assign, _, _, _ = slates.group_core(M_search, caps, slates.GROUP_TABLE,
-                                                restarts=20, seed=7, tail=stop["tail"])
-        _, k = slates.eval_assignment(M, assign, slates.GROUP_TABLE)
-        pts = slates.GROUP_TABLE[k]
-        g_slates.append({
-            "label": stop["label"], "goal": stop["goal"],
-            "lam": 0 if not stop["contra"] and stop["tail"] is None else 1,
-            "ev": _round(pts.mean(), 1), "sd": _round(pts.std(), 1),
-            "e_correct": _round(k.mean(), 2),
-            "p8": _round((k >= 8).mean()), "p5": _round((k >= 5).mean()),
-            "hist": [_round((k == i).mean()) for i in range(17)],
-            "picks": {g_teams[t]: buckets[assign[t]][0] for t in range(len(g_teams))},
-            "probs": {g_teams[t]: _round(M[assign[t], t].mean(), 3)
-                      for t in range(len(g_teams))},
-        })
+    locked_path = config.SEEDS_DIR / "locked_group_slates.json"
+    if locked_path.exists():
+        frozen = json.loads(locked_path.read_text(encoding="utf-8"))
+        b_idx = {b[0]: i for i, b in enumerate(buckets)}
+        t_idx = {t: i for i, t in enumerate(g_teams)}
+        for fs in frozen["slates"]:
+            assign = np.full(len(g_teams), -1)
+            for tk, bid in fs["picks"].items():
+                assign[t_idx[tk]] = b_idx[bid]
+            _, k = slates.eval_assignment(M, assign, slates.GROUP_TABLE)
+            pts = slates.GROUP_TABLE[k]
+            g_slates.append({
+                "label": fs["label"], "goal": fs["goal"], "lam": 0,
+                "locked": True, "pre_lock_ev": fs.get("pre_lock_ev"),
+                "ev": _round(pts.mean(), 1), "sd": _round(pts.std(), 1),
+                "e_correct": _round(k.mean(), 2),
+                "p8": _round((k >= 8).mean()), "p5": _round((k >= 5).mean()),
+                "hist": [_round((k == i).mean()) for i in range(17)],
+                "picks": dict(fs["picks"]),
+                "probs": {tk: _round(M[b_idx[bid], t_idx[tk]].mean(), 3)
+                          for tk, bid in fs["picks"].items()},
+            })
+    else:
+        M_search = M[:, :, :SEARCH_DRAWS] if M.shape[2] > SEARCH_DRAWS else M
+        base_assign, _, _, _ = slates.group_core(M_search, caps, slates.GROUP_TABLE,
+                                                 restarts=20, seed=7)
+        for stop in RISK_STOPS:
+            if stop["contra"]:
+                assign = contrarian(M_search, caps, base_assign, stop["contra"],
+                                    slates.GROUP_TABLE)
+            elif stop["tail"] is None:
+                assign = base_assign
+            else:
+                assign, _, _, _ = slates.group_core(M_search, caps, slates.GROUP_TABLE,
+                                                    restarts=20, seed=7, tail=stop["tail"])
+            _, k = slates.eval_assignment(M, assign, slates.GROUP_TABLE)
+            pts = slates.GROUP_TABLE[k]
+            g_slates.append({
+                "label": stop["label"], "goal": stop["goal"],
+                "lam": 0 if not stop["contra"] and stop["tail"] is None else 1,
+                "ev": _round(pts.mean(), 1), "sd": _round(pts.std(), 1),
+                "e_correct": _round(k.mean(), 2),
+                "p8": _round((k >= 8).mean()), "p5": _round((k >= 5).mean()),
+                "hist": [_round((k == i).mean()) for i in range(17)],
+                "picks": {g_teams[t]: buckets[assign[t]][0] for t in range(len(g_teams))},
+                "probs": {g_teams[t]: _round(M[assign[t], t].mean(), 3)
+                          for t in range(len(g_teams))},
+            })
+
+    # ---- real group-stage outcome + every slate variant scored against it
+    actual = slates.actual_buckets(con)
+    actuals = None
+    if actual:
+        scored = []
+        for s in g_slates:
+            n_c, pts_won = slates.score_slate(s["picks"], actual)
+            s["actual_correct"] = n_c
+            s["actual_points"] = pts_won
+            scored.append({"label": s["label"], "n_correct": n_c, "points": pts_won})
+        actuals = {"buckets": actual, "slates_scored": scored}
 
     # ---- time machine: refit + resim at monthly data cutoffs
     history = [
@@ -675,21 +724,84 @@ def collect(con) -> dict:
                   avg(CASE WHEN record = '0-4' THEN 1.0 ELSE 0.0 END)
            FROM gold.sim_group_draws WHERE run_id = ? GROUP BY 1""", [grp_run]).fetchall()}
 
-    # ---- fantasy: full roster table + card metadata (incl. 64-combo title EVs)
-    fres = fantasy.optimize_rosters(con, top=1, write=False)
+    # ---- fantasy: the P1 board stays pinned to the chained pre-groups run (the
+    # archive of the locked decision); the P2 board re-optimizes on the
+    # post-groups run when one exists (real 8 entrants, 5-emblem banners)
+    def _card_pack(v: dict) -> dict:
+        return {"stats": v["stats"], "n": v["n_games"], "joint": bool(v["joint"]),
+                "players": v["players"],
+                "ev1": _round(v["ev"].get("p1", 0.0), 0),
+                "ev2": _round(v["ev"].get("p2", 0.0), 0),
+                "slots": v["slots"], "sp": v["stat_pts"], "alts": v["alts"],
+                "fit": v["fit_cost"], "opts": v["slot_opts"],
+                "t1": [round(x) for x in v["ev64"].get("p1", [])],
+                "t2": [round(x) for x in v["ev64"].get("p2", [])]}
+
+    pre_frun = slates.latest_run(con, "sim_fantasy_paths", stage="pre_groups")
+    fres = fantasy.optimize_rosters(con, pre_frun, top=1, write=False)
     rosters = [[tidx[r["support_team"]], tidx[r["core_team"]], tidx[r["mid_team"]],
                 round(r["ev_p1"]), round(r["sd_p1"]), round(r["q90_p1"]),
                 round(r.get("ev_p2", 0.0))]
                for r in fres["table"]]
-    cards = {ck: {"stats": v["stats"], "n": v["n_games"], "joint": bool(v["joint"]),
-                  "players": v["players"],
-                  "ev1": _round(v["ev"].get("p1", 0.0), 0),
-                  "ev2": _round(v["ev"].get("p2", 0.0), 0),
-                  "slots": v["slots"], "sp": v["stat_pts"], "alts": v["alts"],
-                  "fit": v["fit_cost"], "opts": v["slot_opts"],
-                  "t1": [round(x) for x in v["ev64"].get("p1", [])],
-                  "t2": [round(x) for x in v["ev64"].get("p2", [])]}
-             for ck, v in fres["cards_meta"].items()}
+    cards = {ck: _card_pack(v) for ck, v in fres["cards_meta"].items()}
+
+    rosters2 = None
+    cards2 = None
+    if br_run:
+        fres2 = fantasy.optimize_rosters(con, br_run, top=1, write=False)
+        rosters2 = [[tidx[r["support_team"]], tidx[r["core_team"]], tidx[r["mid_team"]],
+                     round(r["ev_p2"]), round(r["sd_p2"]), round(r["q90_p2"])]
+                    for r in fres2["table"]]
+        cards2 = {ck: _card_pack(v) for ck, v in fres2["cards_meta"].items()}
+
+    # ---- realized P1 fantasy production per player (who actually performed)
+    p1_actuals = None
+    p1_rows = con.execute(
+        """SELECT f.account_id, count(*), round(sum(f.pts_total)), round(avg(f.pts_total))
+           FROM fan.fantasy_points f
+           JOIN pred.games g USING (match_id)
+           JOIN pred.series se ON se.series_id = g.series_id
+           WHERE se.stage IN ('group_swiss', 'group_elim') AND f.parsed
+           GROUP BY 1"""
+    ).fetchall()
+    if p1_rows:
+        best_series = dict(con.execute(
+            """SELECT p.account_id, round(max(p.pts_series_top2))
+               FROM fan.player_series_points p
+               JOIN pred.series se ON se.series_id = p.series_id
+               WHERE se.stage IN ('group_swiss', 'group_elim')
+               GROUP BY 1"""
+        ).fetchall())
+        p1_actuals = {int(a): [int(g), int(tot), int(avg), int(best_series.get(a, 0))]
+                      for a, g, tot, avg in p1_rows}
+
+    # ---- Bracket Lab payload: real entrants, packed joint draws, optimizer fills
+    bracket = None
+    if br_run:
+        bres = slates.optimize_bracket(con, br_run, top_n=5, write=False)
+        r1_rows = con.execute(
+            """SELECT slot_id, any_value(team1_key), any_value(team2_key)
+               FROM gold.sim_bracket_draws WHERE run_id = ?
+                 AND slot_id IN ('R1M1','R1M2','R1M3','R1M4') GROUP BY 1""",
+            [br_run]).fetchall()
+        entrants = sorted({t for _s, t1, t2 in r1_rows for t in (t1, t2)})
+        qf_pairs = {s: [t1, t2] for s, t1, t2 in r1_rows}
+        eidx = {t: i for i, t in enumerate(entrants)}
+        slot_order = [s["slot"] for s in slots]
+        soi = {s: i for i, s in enumerate(slot_order)}
+        packed = [[None] * len(slot_order) for _ in range(2000)]
+        for d, s, w in con.execute(
+                """SELECT draw_id, slot_id, winner_key FROM gold.sim_bracket_draws
+                   WHERE run_id = ? AND draw_id < 2000""", [br_run]).fetchall():
+            packed[int(d)][soi[s]] = str(eidx[w])
+        bracket = {
+            "run": br_run, "entrants": entrants, "slot_order": slot_order, "qf": qf_pairs,
+            "table": [float(x) for x in slates.BRACKET_TABLE],
+            "sample": ["".join(row) for row in packed if None not in row],
+            "chalk_ev": _round(bres["chalk_ev"], 1),
+            "fills": [{"ev": _round(f["ev"], 1), "picks": f["picks"],
+                       "champion": f["champion"]} for f in bres["fills"]],
+        }
 
     # coach-title condition hit rates: pool-wide (match-level) + the sim's own
     # decider rate (carries rho); fb/torm coverage guards against silent gaps
@@ -724,8 +836,12 @@ def collect(con) -> dict:
         "meta": {
             "as_of": str(as_of), "generated": datetime.now(timezone.utc).isoformat(),
             "group_run": grp_run, "fantasy_run": fres["run_id"],
+            "stage": "post_groups" if br_run else "pre_groups",
+            "bracket_run": br_run, "bracket_draws": int(br_draws) if br_run else None,
+            "fantasy_run2": br_run,
             "n_draws": int(n_draws), "n_paths": int(fres["n_draws"]),
             "rho": _round(rho, 2), "lock_utc": config.GROUP_LOCK_UTC,
+            "bracket_lock_utc": config.BRACKET_LOCK_UTC,
             "model": {"halflife": ratings.HALFLIFE_DAYS, "lam_ti": ratings.LAM_TI,
                       "alpha": ratings.ALPHA},
             "backtest": bt,
@@ -750,10 +866,15 @@ def collect(con) -> dict:
         "news": news,
         "rosters": rosters,
         "cards": cards,
+        "rosters2": rosters2,
+        "cards2": cards2,
         "titles": titles,
         "bucket_matrix": bucket_matrix,
         "group_table": list(slates.GROUP_TABLE),
         "draw_sample": draw_sample,
+        "actuals": actuals,
+        "p1_actuals": p1_actuals,
+        "bracket": bracket,
     }
 
 

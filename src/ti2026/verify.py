@@ -243,6 +243,56 @@ def run() -> bool:
     n_swiss = con.execute("SELECT count(*) FROM pred.swiss_standings").fetchone()[0]
     r.info(f"swiss_standings rows: {n_swiss} (0 until Aug 13)")
 
+    # post-groups: real results + fixed-entrant bracket state
+    n_gsw, n_gel = con.execute(
+        """SELECT count(*) FILTER (WHERE stage = 'group_swiss' AND completed AND winner_key IS NOT NULL),
+                  count(*) FILTER (WHERE stage = 'group_elim' AND completed AND winner_key IS NOT NULL)
+           FROM pred.series"""
+    ).fetchone()
+    if n_gsw or n_gel:
+        r.check(n_gsw == 39 and n_gel == 5,
+                "group stage fully resolved (39 swiss + 5 elim series with winners)",
+                f"{n_gsw} swiss, {n_gel} elim")
+        if n_gsw == 39 and n_gel == 5:
+            from .gold import slates as _slates
+            try:
+                actual = _slates.actual_buckets(con)
+                r.check(actual is not None and len(actual) == 16,
+                        "actual buckets derive with legal capacities (1/2/5/5/2/1)")
+            except AssertionError as exc:
+                r.check(False, "actual buckets derive with legal capacities", str(exc))
+        qf = con.execute(
+            """SELECT count(*), count(DISTINCT team1_key) + count(DISTINCT team2_key)
+               FROM pred.bracket_slots
+               WHERE slot_id IN ('R1M1','R1M2','R1M3','R1M4')
+                 AND team1_key IS NOT NULL AND team2_key IS NOT NULL"""
+        ).fetchone()
+        r.check(qf[0] == 4 and qf[1] == 8, "all 4 UB quarterfinals seeded with 8 distinct teams",
+                f"{qf[0]} filled, {qf[1]} distinct")
+        if has_gold:
+            pg = con.execute(
+                """SELECT run_id FROM gold.sim_meta WHERE stage_state = 'post_groups'
+                     AND run_id IN (SELECT DISTINCT run_id FROM gold.sim_bracket_draws)
+                   ORDER BY created_at DESC LIMIT 1"""
+            ).fetchone()
+            if pg:
+                mismatch = con.execute(
+                    """SELECT count(*) FROM (
+                           SELECT DISTINCT slot_id, team1_key, team2_key
+                           FROM gold.sim_bracket_draws
+                           WHERE run_id = ? AND slot_id IN ('R1M1','R1M2','R1M3','R1M4')
+                       ) b JOIN pred.bracket_slots p USING (slot_id)
+                       WHERE p.team1_key IS NOT NULL AND p.team2_key IS NOT NULL
+                         AND NOT ((b.team1_key = p.team1_key AND b.team2_key = p.team2_key)
+                               OR (b.team1_key = p.team2_key AND b.team2_key = p.team1_key))""",
+                    [pg[0]],
+                ).fetchone()[0]
+                r.check(mismatch == 0,
+                        "post-groups sim entrants match the real bracket fill", f"run {pg[0]}")
+            else:
+                r.check(False, "post-groups fixed-entrant sim exists",
+                        "bracket seeded but no post_groups run — `ti live` or `ti sim --stage post_groups`")
+
     con.close()
     print(("ALL CHECKS PASSED" if r.failures == 0 else f"{r.failures} CHECK(S) FAILED"))
     return r.failures == 0

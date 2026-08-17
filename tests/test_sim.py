@@ -63,7 +63,9 @@ def test_degenerate_bracket_matches_hand_computation():
     expected_winner = {
         "R1M1": 0, "R1M2": 3, "R1M3": 1, "R1M4": 2,   # UB QFs (1v8, 4v5, 2v7, 3v6)
         "R1M5": 4, "R1M6": 5,                          # LB R1 among QF losers
-        "R2M1": 0, "R2M2": 1, "R2M3": 3, "R2M4": 2,
+        # UB SF losers CROSS into the opposite half's LB QF (TI2025-verified):
+        # R2M3 = w(R1M5)=4 vs l(R2M2)=2 -> 2; R2M4 = w(R1M6)=5 vs l(R2M1)=3 -> 3
+        "R2M1": 0, "R2M2": 1, "R2M3": 2, "R2M4": 3,
         "R3M1": 2, "R4M1": 0, "R4M2": 1, "R5M1": 0,    # champion = strongest team
     }
     assert set(out) == set(expected_winner)

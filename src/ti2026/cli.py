@@ -308,19 +308,21 @@ def pick_fantasy(
     run_id: str = typer.Option("", help="sim run with fantasy paths (default: latest)"),
     top: int = typer.Option(10),
 ):
-    """Rank all 4,096 fantasy team-triples (16^3, repeats allowed) by period-1 EV."""
+    """Rank fantasy team-triples (repeats allowed; alive teams only) by the run's
+    primary-period EV — p1 on chained pre-groups runs, p2 on post-groups runs."""
     from .gold import build as gold_build
     from .gold import fantasy
 
     con = gold_build.connect()
     try:
         res = fantasy.optimize_rosters(con, run_id or None, top=top)
+        pr = res["primary"]
         typer.echo(f"run {res['run_id']}  ({res['n_draws']} paths, periods {res['periods']})")
         for i, r in enumerate(res["top"], 1):
             extra = "".join(f"  {k[3:]} EV {v:.0f}" for k, v in r.items()
-                            if k.startswith("ev_") and k != "ev_p1")
-            typer.echo(f"  #{i:2d} EV(p1) {r['ev_p1']:.0f}  sd {r['sd_p1']:.0f}  "
-                       f"q90 {r['q90_p1']:.0f}{extra}")
+                            if k.startswith("ev_") and k != f"ev_{pr}")
+            typer.echo(f"  #{i:2d} EV({pr}) {r[f'ev_{pr}']:.0f}  sd {r[f'sd_{pr}']:.0f}  "
+                       f"q90 {r[f'q90_{pr}']:.0f}{extra}")
             if r.get("best_title"):
                 bt_ = r["best_title"]
                 typer.echo(f"       titles   {bt_['prefix']} + {bt_['suffix']}"
@@ -447,6 +449,44 @@ def live():
     from .gold import build as gold_build
 
     gold_build.run()
+
+    # post-groups: once the real bracket is seeded on Liquipedia, every live run
+    # re-creates the fixed-entrant sim + slates (build-gold drops the gold schema,
+    # so bracket/fantasy-P2 picks would otherwise vanish each refresh)
+    from .gold import sim as gold_sim
+
+    con = gold_build.connect()
+    try:
+        qf_filled = con.execute(
+            """SELECT count(*) FROM pred.bracket_slots
+               WHERE slot_id IN ('R1M1','R1M2','R1M3','R1M4')
+                 AND team1_key IS NOT NULL AND team2_key IS NOT NULL"""
+        ).fetchone()[0]
+        if qf_filled == 4:
+            from .gold import fantasy as fantasy_mod
+            from .gold import slates as slates_mod
+
+            run_id = gold_sim.run(con, n_paths=20000, stage_state="post_groups")
+            typer.echo(f"post-groups sim: {run_id}")
+            bres = slates_mod.optimize_bracket(con, run_id)
+            typer.echo(f"  bracket slate EV {bres['fills'][0]['ev']:.0f} "
+                       f"(chalk {bres['chalk_ev']:.0f})  "
+                       f"champion {bres['fills'][0]['champion']}")
+            gold_build.export_decision("bracket", run_id, bres)
+            fres = fantasy_mod.optimize_rosters(con, run_id)
+            pr = fres["primary"]
+            top_r = fres["top"][0]
+            typer.echo(f"  fantasy {pr} top roster: {top_r['support_team']} / "
+                       f"{top_r['core_team']} / {top_r['mid_team']}  "
+                       f"EV {top_r[f'ev_{pr}']:.0f}")
+            gold_build.export_decision(
+                "fantasy", run_id, {k: v for k, v in fres.items() if k != "table"})
+        else:
+            typer.echo("bracket not seeded yet ({}/4 QF slots) — post-groups sim skipped"
+                       .format(qf_filled))
+    finally:
+        con.close()
+
     from . import verify as verify_mod
 
     verify_mod.run()

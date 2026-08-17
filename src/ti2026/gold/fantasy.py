@@ -53,21 +53,31 @@ QUALITY_BOOST = {1: 0.10, 2: 0.30, 3: 0.60, 4: 1.00, 5: 1.50}
 MIN_JOINT_GAMES = 15
 
 
-def load_banner_layouts() -> dict[str, list[str]]:
-    """seeds/banner_layouts.csv: role -> emblem slot colors (color split is fixed
-    per role, tutorial_03). TI2025-precedent defaults until confirmed in-client."""
+def load_banner_layouts() -> dict[str, dict[str, list[str]]]:
+    """seeds/banner_layouts.csv: period -> role -> ordered emblem slot colors.
+
+    Color split AND slot order are fixed per role (tutorial_03; order matters for
+    adjacency traits). TI2026 client-confirmed 2026-08-17: Group Stage (p1) banners
+    have 3 emblems, Main Event (p2) banners have 5 — the first three carry over and
+    two slots are added. Rows without a period column read as p1 (legacy shape)."""
     import csv
 
     from .. import config
 
     path = config.SEEDS_DIR / "banner_layouts.csv"
-    layouts = {"core": ["red", "red", "green"], "mid": ["red", "green", "blue"],
-               "support": ["blue", "blue", "green"]}
+    layouts = {
+        "p1": {"core": ["red", "green", "red"], "mid": ["red", "blue", "green"],
+               "support": ["blue", "green", "blue"]},
+        "p2": {"core": ["red", "green", "red", "green", "red"],
+               "mid": ["red", "blue", "green", "red", "green"],
+               "support": ["blue", "green", "blue", "green", "blue"]},
+    }
     if path.exists():
         with open(path, encoding="utf-8-sig") as f:
             for r in csv.DictReader(f):
                 if r.get("role") and r.get("slots"):
-                    layouts[r["role"]] = r["slots"].split("|")
+                    layouts.setdefault(r.get("period") or "p1", {})[r["role"]] = \
+                        r["slots"].split("|")
     return layouts
 
 # ------------------------------------------------------------- coach titles
@@ -121,8 +131,9 @@ def _add_flags(df: pd.DataFrame, titles: dict) -> None:
 def banner_score(pts: dict[str, float], emblems: list[tuple[str, int, str | None]]) -> float:
     """Exact War Banner math for a single game's stat points.
 
-    emblems: up to 3 of (stat, quality_tier 1-5, trait), slot order = adjacency
-    (middle slot neighbors both edges). Quality and trait effects COMBINE
+    emblems: (stat, quality_tier 1-5, trait) per slot — 3 in the group stage, 5 in
+    the main event — slot order = adjacency chain (inner slots neighbor both
+    sides, edge slots one). Quality and trait effects COMBINE
     ADDITIVELY as percentages of the base stat score (tutorial_05/06 wording +
     the in-client emblem header showing Tier II (+30%) with a −10% adjacency
     effect as a net 120%)."""
@@ -407,13 +418,19 @@ def optimize_rosters(con, run_id: str | None = None, seed: int = 1, top: int = 1
     titles = load_titles(con)
     layouts = load_banner_layouts()
     pool = load_pool(con, titles)
-    cards, _names = cards_from_roster(con)
+    all_cards, _names = cards_from_roster(con)
     rng = np.random.default_rng(seed)
 
     periods = sorted(pdf.period_id.unique())
+    primary = periods[0]      # 'p1' on chained pre-groups runs, 'p2' on post-groups
+    # post-groups paths only carry the 8 bracket entrants — eliminated teams score 0
+    # by definition, so drop their cards (16^3 -> 8^3 triples on a post-groups run)
+    alive = set(pdf.team_key.unique())
+    cards = [c for c in all_cards if c["team"] in alive]
     n_combo = len(titles["prefixes"]) * len(titles["suffixes"])
+    # position-wide priors stay built from ALL rosters, not just alive teams
     kind_accounts: dict[str, list[int]] = {"support": [], "core": [], "mid": []}
-    for card in cards:
+    for card in all_cards:
         kind_accounts[card["kind"]].extend(card["accounts"])
     kind_banks = {k: kind_bank(pool, accs, titles["fcols"])
                   for k, accs in kind_accounts.items()}
@@ -422,26 +439,39 @@ def optimize_rosters(con, run_id: str | None = None, seed: int = 1, top: int = 1
     for card in cards:
         own = card_bank(pool, card["accounts"], titles["fcols"])
         bank = blend_bank(own, kind_banks[card["kind"]])
-        layout = layouts[card["kind"]]
-        stats_idx = choose_stats(bank, layout=layout)      # color-locked per role
         means = _pool_means(bank)
-        free_idx = choose_stats(bank)                      # unconstrained reference
-        alts = []
-        for si, color in enumerate(layout):
-            pool_i = [i for i in np.argsort(-means)
-                      if STAT_COLOR[STAT_COLS[i]] == color and i not in stats_idx]
-            alts.append([STAT_COLS[pool_i[0]][4:],
-                         round(float(means[stats_idx[si]] - means[pool_i[0]]))]
-                        if pool_i else None)
-        fit_cost = float(means[free_idx].sum() - means[np.array(stats_idx)].sum())
-        scores, ev64 = card_period_scores(bank, stats_idx, pdf[pdf.team_key == card["team"]],
-                                          n_draws, rng, titles)
+        tpaths = pdf[pdf.team_key == card["team"]]
+        scores: dict[str, np.ndarray] = {}
+        ev64: dict[str, np.ndarray] = {}
+        pmeta: dict[str, dict] = {}
+        # banner layouts differ per period (3 emblems in p1, 5 in p2) -> stats are
+        # chosen and scored per period
+        for period in periods:
+            layout = layouts.get(period, layouts["p1"])[card["kind"]]
+            stats_idx = choose_stats(bank, layout=layout)  # color-locked per role
+            s, e = card_period_scores(bank, stats_idx,
+                                      tpaths[tpaths.period_id == period],
+                                      n_draws, rng, titles)
+            scores[period] = s.get(period, np.zeros(n_draws))
+            ev64[period] = e.get(period, np.zeros(n_combo, dtype=np.float32))
+            free_idx = choose_stats(bank, k=len(layout))   # unconstrained reference
+            alts = []
+            for si, color in enumerate(layout):
+                pool_i = [i for i in np.argsort(-means)
+                          if STAT_COLOR[STAT_COLS[i]] == color and i not in stats_idx]
+                alts.append([STAT_COLS[pool_i[0]][4:],
+                             round(float(means[stats_idx[si]] - means[pool_i[0]]))]
+                            if pool_i else None)
+            pmeta[period] = {
+                "stats": [STAT_COLS[i][4:] for i in stats_idx], "slots": layout,
+                "stat_pts": [round(float(means[i])) for i in stats_idx],
+                "alts": alts,
+                "fit_cost": round(float(means[free_idx].sum()
+                                        - means[np.array(stats_idx)].sum())),
+                "slot_opts": slot_options(means, layout),
+            }
         per_card[(card["team"], card["kind"])] = {
-            "scores": scores, "stats": [STAT_COLS[i][4:] for i in stats_idx],
-            "slots": layout,
-            "stat_pts": [round(float(means[i])) for i in stats_idx],
-            "alts": alts, "fit_cost": round(fit_cost),
-            "slot_opts": slot_options(means, layout),
+            "scores": scores, **pmeta[primary],
             "joint": bank["joint"], "n_games": bank["n_w"] + bank["n_l"],
             "accounts": card["accounts"],
             "players": [_names.get(a, str(a)) for a in card["accounts"]],
@@ -451,26 +481,28 @@ def optimize_rosters(con, run_id: str | None = None, seed: int = 1, top: int = 1
 
     teams = sorted({c["team"] for c in cards})
     rows = []
-    p1 = periods[0]
     # repeats allowed: the client's Choose Team selector accepts the same team in
-    # several role slots (confirmed in-client 2026-08-01) -> 16^3 ordered triples.
-    # Same-team cards share the team's simulated series path, so their per-draw
-    # sums are correlated exactly as the tournament correlates them.
+    # several role slots (confirmed in-client 2026-08-01) -> ordered triples over
+    # the alive teams (16^3 pre-groups, 8^3 post-groups). Same-team cards share the
+    # team's simulated series path, so their per-draw sums are correlated exactly
+    # as the tournament correlates them.
     for ts in teams:
         s_arr = per_card[(ts, "support")]["scores"]
         for tc in teams:
             c_arr = per_card[(tc, "core")]["scores"]
             for tm in teams:
                 m_arr = per_card[(tm, "mid")]["scores"]
-                tot1 = s_arr[p1] + c_arr[p1] + m_arr[p1]
+                tot0 = s_arr[primary] + c_arr[primary] + m_arr[primary]
                 row = {"support_team": ts, "core_team": tc, "mid_team": tm,
-                       "ev_p1": float(tot1.mean()), "sd_p1": float(tot1.std()),
-                       "q90_p1": float(np.quantile(tot1, 0.9))}
+                       f"ev_{primary}": float(tot0.mean()),
+                       f"sd_{primary}": float(tot0.std()),
+                       f"q90_{primary}": float(np.quantile(tot0, 0.9))}
                 for p in periods[1:]:
                     tot = s_arr.get(p, 0) + c_arr.get(p, 0) + m_arr.get(p, 0)
                     row[f"ev_{p}"] = float(np.mean(tot))
                 rows.append(row)
-    table = pd.DataFrame(rows).sort_values("ev_p1", ascending=False).reset_index(drop=True)
+    table = (pd.DataFrame(rows).sort_values(f"ev_{primary}", ascending=False)
+             .reset_index(drop=True))
 
     def _combo64(ts: str, tc: str, tm: str, period: str) -> np.ndarray:
         z = np.zeros(n_combo)
@@ -481,7 +513,7 @@ def optimize_rosters(con, run_id: str | None = None, seed: int = 1, top: int = 1
     top_rows = table.head(top).to_dict("records")
     detail = []
     for r in top_rows:
-        combo = _combo64(r["support_team"], r["core_team"], r["mid_team"], p1)
+        combo = _combo64(r["support_team"], r["core_team"], r["mid_team"], primary)
         bi = int(np.argmax(combo))
         n_s = len(titles["suffixes"])
         detail.append({
@@ -504,15 +536,16 @@ def optimize_rosters(con, run_id: str | None = None, seed: int = 1, top: int = 1
     if write:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         for i, d in enumerate(detail, 1):
-            sid = f"fantasy-{run_id}-p1-top{i}"
+            sid = f"fantasy-{run_id}-{primary}-top{i}"
             con.execute("DELETE FROM gold.slates WHERE slate_id = ?", [sid])
             con.execute(
                 "INSERT INTO gold.slates VALUES (?,?,?,?,?,?,?,?)",
-                [sid, "fantasy", run_id, json.dumps(d, default=str), d["ev_p1"],
-                 None, "card_bootstrap", now],
+                [sid, "fantasy", run_id, json.dumps(d, default=str),
+                 d[f"ev_{primary}"], None, "card_bootstrap", now],
             )
     return {
         "run_id": run_id, "n_draws": int(n_draws), "top": detail, "periods": periods,
+        "primary": primary,
         # full ranking + card metadata for downstream consumers (dashboard risk slider)
         "table": table.round(1).to_dict("records"),
         "cards_meta": {f"{t}|{k}": {"stats": v["stats"], "joint": v["joint"],

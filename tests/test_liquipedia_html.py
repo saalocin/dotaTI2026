@@ -34,6 +34,26 @@ def test_bracket_slot_assignment(ti2025_main_html):
         assert w in (slots[dst].team1_raw, slots[dst].team2_raw), f"{src} winner {w} not in {dst}"
 
 
+def test_bracket_loser_feeds_match_topology_seed(ti2025_main_html):
+    """The seeds/bracket_topology.csv loser-drop wiring (QF losers pair within
+    their half; UB SF loser meets the SAME half's LB survivor; UBF loser to LB
+    Final) must hold on the completed TI2025 bracket — same format as TI2026."""
+    series = liquipedia_html.bracket_series(ti2025_main_html)
+    slots = liquipedia_html.assign_bracket_slots(series)
+
+    def loser(sid):
+        s = slots[sid]
+        return s.team2_raw if s.winner_raw == s.team1_raw else s.team1_raw
+
+    drops = {"R1M1": "R1M5", "R1M2": "R1M5", "R1M3": "R1M6", "R1M4": "R1M6",
+             "R2M1": "R2M4", "R2M2": "R2M3", "R4M1": "R4M2"}
+    for src, dst in drops.items():
+        l_ = loser(src)
+        assert l_ in (slots[dst].team1_raw, slots[dst].team2_raw), \
+            f"{src} loser {l_} did not drop into {dst} " \
+            f"(got {slots[dst].team1_raw} vs {slots[dst].team2_raw})"
+
+
 def test_swiss_standings(ti2025_group_html):
     rows = liquipedia_html.swiss_standings(ti2025_group_html)
     assert len(rows) == 16

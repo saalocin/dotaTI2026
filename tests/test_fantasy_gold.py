@@ -187,6 +187,65 @@ def test_title_boost_reorders_top2():
     assert ev64["p1"][0] == pytest.approx(10 + 9 * 1.24, rel=1e-5)
 
 
+def test_optimize_rosters_post_groups_p2_only():
+    """A post-groups run has p2-only paths and only the alive teams. The
+    optimizer must not KeyError (the old s_arr['p1'] bug), must label outputs
+    by the real period, and must use the 5-emblem P2 banner layouts."""
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA fan"); con.execute("CREATE SCHEMA gold")
+    con.execute("CREATE SCHEMA meta")
+    con.execute("""CREATE TABLE fan.players (
+        team_key VARCHAR, account_id BIGINT, fantasy_slot VARCHAR, nickname VARCHAR)""")
+    acc = 0
+    for team in ("alpha", "beta", "gamma"):     # gamma is eliminated (no p2 paths)
+        for slot in ("safelane", "mid", "offlane", "support", "support"):
+            acc += 1
+            con.execute("INSERT INTO fan.players VALUES (?,?,?,?)",
+                        [team, acc, slot, f"{team}_{slot}_{acc}"])
+    stat_cols = ", ".join(f"{c} DOUBLE" for c in fantasy.STAT_COLS)
+    con.execute(f"""CREATE TABLE gold.fantasy_game_pool (
+        match_id BIGINT, account_id BIGINT, win BOOLEAN, weight DOUBLE,
+        hero_id INT, duration_s INT, first_blood_time_s INT,
+        tormentor_victims INT, {stat_cols})""")
+    rng_vals = {c: 50.0 + 10*i for i, c in enumerate(fantasy.STAT_COLS)}
+    stat_sql = ", ".join(str(rng_vals[c]) for c in fantasy.STAT_COLS)
+    mid = 0
+    for a in range(1, acc + 1):
+        for win in (True, True, False, False):
+            mid += 1
+            con.execute(f"""INSERT INTO gold.fantasy_game_pool VALUES
+                ({mid}, {a}, {win}, 1.0, 1, 2000, 300, 0, {stat_sql})""")
+    con.execute("""CREATE TABLE meta.coach_titles (
+        title VARCHAR, side VARCHAR, pct DOUBLE, cond_type VARCHAR,
+        cond_param VARCHAR, note VARCHAR)""")
+    con.execute("INSERT INTO meta.coach_titles VALUES ('P','prefix',10,'hero_tag','red','')")
+    con.execute("INSERT INTO meta.coach_titles VALUES ('S','suffix',24,'duration_lt_s','1500','')")
+    con.execute("CREATE TABLE meta.hero_tags (hero_id INT, tags VARCHAR[])")
+    con.execute("INSERT INTO meta.hero_tags VALUES (1, ['red'])")
+    con.execute("""CREATE TABLE gold.sim_fantasy_paths (
+        run_id VARCHAR, draw_id INT, team_key VARCHAR, period_id VARCHAR,
+        won BOOLEAN, n_games INT, best_of INT)""")
+    for d in range(8):
+        for team, won in (("alpha", True), ("beta", False)):
+            con.execute("INSERT INTO gold.sim_fantasy_paths VALUES (?,?,?,?,?,?,?)",
+                        ["pg-test", d, team, "p2", won, 3, 3])
+
+    res = fantasy.optimize_rosters(con, "pg-test", write=False)
+    assert res["primary"] == "p2"
+    assert res["periods"] == ["p2"]
+    assert len(res["table"]) == 8                     # 2^3 alive-team triples only
+    seen = {r[k] for r in res["table"] for k in ("support_team", "core_team", "mid_team")}
+    assert seen == {"alpha", "beta"}                  # gamma excluded
+    assert {"ev_p2", "sd_p2", "q90_p2"} <= set(res["table"][0])
+    assert res["top"][0]["best_title"]["prefix"] == "P"
+    for meta_ in res["cards_meta"].values():          # P2 banners carry 5 emblems
+        assert len(meta_["slots"]) == 5
+        assert len(meta_["stats"]) == 5
+        assert len(set(meta_["stats"])) == 5          # no duplicate stats
+
+
 def test_add_flags_semantics():
     titles = _titles()
     df = pd.DataFrame({

@@ -30,6 +30,7 @@ BROWSER_UA = (
 
 EVENT_TZ = "Asia/Shanghai"  # all storage is UTC; this is for display/lock math only
 GROUP_LOCK_UTC = "2026-08-13T02:00:00Z"  # 10:00 CST Aug 13
+BRACKET_LOCK_UTC = "2026-08-20T02:00:00Z"  # first main-event series (compendium lock_date)
 BACKFILL_SINCE = "2026-01-01"
 
 # Minimum seconds between requests, per bucket. Conservative vs published limits.

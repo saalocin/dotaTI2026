@@ -33,7 +33,28 @@ and **Fantasy**.
   `seeds/swiss_buckets.csv`; note the bottom three are split 1-4 vs 0-4, and the middle ten
   are judged by **elimination-round results**, not Swiss seeding.
 - **All 16 teams are known** (7 invites + regionals; see `seeds/team_crosswalk.csv`). Mind the
-  renames: BetBoom → **BoomBoys**, 1w/ex-Tundra → **Iron Wing**, ex-L1GA TEAM → **HULIGANI**.
+  renames: BetBoom → **BoomBoys**, 1w/ex-Tundra → **Iron Wing**, ex-L1GA TEAM → **HULIGANI**,
+  and PARIVISION → **TEAM VISION** (verified 2026-08-17: Liquipedia's TI matchlists/bracket
+  still render "PARIVISION" while the standings say "TEAM VISION" — same five players; the
+  earlier "distinct org" note was wrong).
+
+### Group Stage RESULT (Aug 13–16, captured from ingested data 2026-08-17)
+
+- **Swiss:** 1 TEAM VISION 4-0 · 2 Liquid 4-1 · 3 Nigma 4-1 (all direct to playoffs) ·
+  4–8 Spirit, Iron Wing, Falcons, Aurora, LGD 3-2 · 9–13 BoomBoys, Vici, Yandex,
+  Resilience, GamerLegion 2-3 · 14 Xtreme 1-4 · 15 OG 1-4 · 16 HULIGANI 0-4.
+- **Elimination Round:** Yandex 2-1 LGD (reverse sweep) · Falcons 2-0 Vici · BoomBoys 2-0
+  Aurora · Spirit 2-1 Resilience · Iron Wing 2-0 GamerLegion.
+- **Main Event UB QFs (Aug 20 UTC):** 02:00 Spirit–Iron Wing · 05:00 VISION–BoomBoys ·
+  08:00 Liquid–Yandex · 11:00 Nigma–Falcons.
+- **Our pre-lock slates scored:** MAX EV 7/16 → 1,800 pts (E[correct] was 5.9) · BUNKER
+  6/16 → 1,200 · variants II/IV 7/16. Misses: Yandex-as-4-0 (went 2-3), Nigma called
+  elim-loser (went 4-1), VISION one row off (picked 4-1).
+- **Loser-drop wiring verified** on the completed TI2025 bracket (same format): UB QF
+  losers pair within their half (QF1/QF2 → LB R1 A, QF3/QF4 → LB R1 B), **UB SF losers
+  CROSS** into the opposite half's LB QF, UBF loser → LB Final. `seeds/bracket_topology.csv`
+  was corrected accordingly on 2026-08-17 (the inferred same-half SF drop was wrong) and a
+  pinned loser-feed test now guards it.
 
 ### Fantasy roster construction (Valve announcement, Jul 30 2026)
 
@@ -47,13 +68,16 @@ changed prefixes/suffixes and added coach self-modifiers vs TI2025 — the in-cl
 in `assests/` are the TI2026-current source of truth (TI2025 point values were different; do
 not mix years).
 
-### Carry-over knowledge from TI2024/TI2025 (likely but unconfirmed for TI2026)
+### Period structure and War Banner growth (TI2026-confirmed 2026-08-17)
 
-- War Banner = **3 emblems** + prefix/suffix titles per player card ("adjacent" traits: middle
-  slot has 2 neighbors, edge slots 1).
-- Scoring **periods are stage-based** (TI2025: 2 periods with roster locks; TI2024: 3). Roll
-  tokens granted per period (TI2025: 40) and unused tokens carry over.
-- Series scoring: best 2 maps of a series count (already in §2.4); best series per period per role.
+- **Two periods**: P1 = Group Stage (Swiss + Elimination Round), P2 = Main Event. The P2
+  roster snapshot locks when P2 matches begin — **Aug 20 02:00 UTC** (TI2025-precedent
+  reading of §2.4 step 1; no separate fantasy timestamp exists in the compendium definition).
+- **War Banner = 3 emblems in P1, 5 in P2** — the first three carry over and two slots are
+  added for the Main Event (user-verified in-client + three independent guides). Ordered
+  layouts in §2.6. Adjacency chain: edge slots 1 neighbor, inner slots 2.
+- **Roll tokens: 40 for the Group Stage + a separate 30 for the Main Event.**
+- Series scoring: best 2 maps of a series count (§2.4); best series per period per role.
 
 ---
 
@@ -140,6 +164,10 @@ series, all the way to the winner of TI. Scored after The International ends.
 - You always have **3 unique roll options** for emblems, the same options for every War Banner.
 - Each roll costs **1 roll token**, affects **only the currently selected War Banner**, and
   **replaces all available roll options** when used.
+- `fantasy_tutorial_07.png` ("How it works"): **any crafting operation costs one Roll
+  Token**; operations apply only to the selected player and choosing any operation replaces
+  the available options — a token can also be spent purely to refresh the option set.
+- Token grants: **40 for the Group Stage, a separate 30 for the Main Event** (TI2026).
 
 ### 2.3 Coaching Titles
 
@@ -232,8 +260,11 @@ attributes — **Color, Stat, Quality, Trait** — and:
 
 - An emblem is **Red, Green, or Blue**; the **color distribution of a War Banner cannot be
   modified and is set by the player's Role** → stat choice is color-constrained per role.
-  Role layouts (TI2025 precedent, TI2026 counts unconfirmed): core **2R+1G**,
-  support **2B+1G**, mid **R+G+B** — machine-readable in `seeds/banner_layouts.csv`.
+  **TI2026 ordered layouts (client-confirmed 2026-08-17, machine-readable in
+  `seeds/banner_layouts.csv`):** Group Stage (3 emblems) core **R-G-R**, mid **R-B-G**,
+  support **B-G-B**; Main Event (5 emblems — the three carry over, two added) core
+  **R-G-R-G-R** (3R+2G), mid **R-B-G-R-G** (2R+2G+1B), support **B-G-B-G-B** (3B+2G).
+  Slot ORDER matters for adjacency traits.
 - **Only stats you hold an emblem for score points** (tutorial_04, matches §2.4).
 - **Quality** "provides a percentage bonus base fantasy score" and **Trait** "can provide an
   additional percentage bonus to the base fantasy score" → quality and trait effects read as
@@ -297,11 +328,10 @@ Resolved by research (see §0): roster construction (5 players / 3 teams / 2+2+1
 
 Still open — screenshot these from the client when visible:
 
-- TI2026 emblem count per card (3 at TI2024/25; one unverified claim of 5) and the exact color
-  split of the duo-card banners — layouts in `seeds/banner_layouts.csv` are the TI2025
-  precedent until confirmed. **Screenshot each role's full War Banner** (all emblem slots
-  visible) to settle both; the tutorial background shows a core banner with ≥3 emblems
-  (red/…/red) consistent with 2R+1G.
+- ~~TI2026 emblem count per card and color split~~ — **RESOLVED 2026-08-17**: 3 emblems in
+  P1 growing to **5 in the Main Event** (the three carry over, two slots added), ordered
+  layouts confirmed in-client by the user and by three independent guides (§2.6,
+  `seeds/banner_layouts.csv`).
 - ~~Full list of TI2026 Coaching Titles~~ — **captured** (`fantasy_title_bonuses.png`, §2.3).
   ~~Per-hero tag list~~ — **captured from the client itself** (2026-08-01 update:
   `ti ingest dotaclient` reads npc_heroes.txt "Adjectives", incl. the new
@@ -309,7 +339,10 @@ Still open — screenshot these from the client when visible:
   vs multiplicative); hovering the dialog's underlined terms can spot-check a few tags.
 - The "coach self-modifiers" mentioned in Valve's announcement, if they are a separate
   mechanic from the titles above — nothing else visible in the dialog yet.
-- TI2026 period boundaries, roster lock times, and roll-token grant per period.
+- ~~TI2026 period boundaries and roll-token grant per period~~ — **resolved**: P1 = groups
+  (locked Aug 13), P2 = Main Event, 40 + 30 tokens (§0). Still open: the exact P2 roster
+  snapshot second (we assume first P2 match, Aug 20 02:00 UTC) and whether unused P1
+  tokens carry into the P2 pool ("separate pool" phrasing suggests not).
 - ~~The exact Swiss bucket set~~ — **captured** from the client compendium definition
   (league 19719) into `seeds/swiss_buckets.csv`; sanity-check in-client on Aug 13.
 
@@ -324,8 +357,11 @@ Still open — screenshot these from the client when visible:
   (compensated 3 tokens/emblem); teamfight participation is an undocumented Valve formula with a
   cap — OpenDota's `teamfight_participation` is a parser heuristic. Calibrate both.
 - **Ratings traps**: Liquipedia Glicko-2 resets on team rename → Iron Wing (ex-Tundra) is badly
-  under-rated; TEAM VISION ≠ PARIVISION (world #1, not at TI); several TI teams sit outside the
-  top-20 board (RD < 100 listing rule). Join ratings only via the crosswalk aliases.
+  under-rated; **TEAM VISION = PARIVISION** (rebrand — CORRECTED 2026-08-17: the July research
+  concluded "distinct orgs" from the live rating board, but the TI pages render both names for
+  the same five; PARIVISION's world-#1 Glicko therefore belonged to this unit and its pre-TI
+  prior under-rated them); several TI teams sit outside the top-20 board (RD < 100 listing
+  rule). Join ratings only via the crosswalk aliases.
 - **Team ids ≠ five-man units** (verified 2026-07-31): OpenDota ids drift on re-registration
   (HULIGANI's current unit played 159 games across 6+ ids; its seeded id had zero) AND persist
   across roster swaps (OG's id carries 141 stale-lineup games). Silver therefore attributes a

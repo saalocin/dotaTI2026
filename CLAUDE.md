@@ -47,7 +47,8 @@ scoring, or optimization work, and update it when new rule details or screenshot
   league 19719 — 4-0/4-1/elim-victor/elim-loser/1-4/0-4), war-banner slot layouts
   (`banner_layouts.csv`, TI2025 precedent until confirmed by banner screenshots).
   **Never join teams by raw name** — always via the crosswalk (renames: BoomBoys=ex-BetBoom,
-  Iron Wing=ex-1w/Tundra, HULIGANI=ex-L1GA TEAM).
+  Iron Wing=ex-1w/Tundra, HULIGANI=ex-L1GA TEAM, TEAM VISION=ex-PARIVISION — Liquipedia
+  renders BOTH names for the latter on the same TI pages).
 
 ### Data sources (ranked; see plan research)
 
@@ -89,14 +90,21 @@ uv run ti build-gold             # ratings + matchup matrix + 50k tournament sim
 uv run ti backtest [--tune]      # walk-forward model validation vs baselines
 uv run ti sim --stage post_groups [--entrants ...]   # fixed-entrant bracket draws
 uv run ti pick group|bracket|fantasy                 # optimized slates + JSON export
-uv run ti verify                 # end-to-end sanity checks (silver + gold)
+uv run ti verify                 # end-to-end sanity checks (silver + gold + post-groups state)
 uv run ti live                   # daily live sequence (ingest→silver→gold→verify)
 uv run pytest -q                 # parser + scoring + sim + optimizer tests
 ```
 
 Daily during TI (Aug 13–23): run `uv run ti live` ~1h after the last series (OpenDota parse lag
-20–60 min). First 2 days: calibrate madstone/stuns/TFP vs the in-client scoreboard into
-`meta.stat_calibration` (screenshot scoreboards into `assests/`).
+20–60 min), then `ti dashboard` + republish the artifact. **`ti live` is stage-aware**: once
+the 4 UB QF slots are seeded in `pred.bracket_slots` it automatically appends the post-groups
+tail — fixed-entrant `sim --stage post_groups` (20k fantasy paths) → `optimize_bracket` →
+`optimize_rosters` (P2, 5-emblem banners, 8 alive teams) with decision JSON exports — so the
+bracket slate and Fantasy·P2 board survive every gold rebuild. Post-groups the dashboard also
+scores every group-slate variant against `slates.actual_buckets` and ships the interactive
+Bracket Lab (packed 2,000-draw joint sample). First 2 days of each stage: calibrate
+madstone/stuns/TFP vs the in-client scoreboard into `meta.stat_calibration` (screenshot
+scoreboards into `assests/`).
 
 ## Layout
 

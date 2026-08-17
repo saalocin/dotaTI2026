@@ -1,0 +1,145 @@
+{
+  "generated_from": "2026-08-06T11:43:30.882047+00:00",
+  "locked_at": "2026-08-13T02:00:00Z",
+  "note": "pre-lock group slates frozen from the Aug 6 build (the last pre-groups refresh) - the honest scoring reference; post-groups re-optimization would leak outcome knowledge",
+  "slates": [
+    {
+      "goal": "max P(\u22654 correct)",
+      "label": "BUNKER",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "4-0",
+        "falcons": "elim-victor",
+        "gamerlegion": "1-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-victor",
+        "lgd": "elim-loser",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "0-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-1",
+        "xtreme": "elim-loser",
+        "yandex": "4-1"
+      },
+      "pre_lock_ev": 941.8
+    },
+    {
+      "goal": "max expected points",
+      "label": "MAX EV",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "4-1",
+        "falcons": "elim-victor",
+        "gamerlegion": "0-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-victor",
+        "lgd": "elim-loser",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "1-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-1",
+        "xtreme": "elim-loser",
+        "yandex": "4-0"
+      },
+      "pre_lock_ev": 955.7
+    },
+    {
+      "goal": "best slate \u22652 picks off consensus",
+      "label": "VARIANT II",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "elim-victor",
+        "falcons": "4-1",
+        "gamerlegion": "0-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-victor",
+        "lgd": "elim-loser",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "1-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-1",
+        "xtreme": "elim-loser",
+        "yandex": "4-0"
+      },
+      "pre_lock_ev": 953.5
+    },
+    {
+      "goal": "best slate \u22654 picks off consensus",
+      "label": "VARIANT IV",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "elim-victor",
+        "falcons": "4-1",
+        "gamerlegion": "0-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-victor",
+        "lgd": "elim-loser",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "1-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-0",
+        "xtreme": "elim-loser",
+        "yandex": "4-1"
+      },
+      "pre_lock_ev": 945.8
+    },
+    {
+      "goal": "best slate \u22656 picks off consensus",
+      "label": "VARIANT VI",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "elim-victor",
+        "falcons": "4-1",
+        "gamerlegion": "1-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-victor",
+        "lgd": "elim-loser",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "0-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-0",
+        "xtreme": "elim-loser",
+        "yandex": "4-1"
+      },
+      "pre_lock_ev": 939.6
+    },
+    {
+      "goal": "best slate \u22658 picks off consensus",
+      "label": "FULL SEND",
+      "picks": {
+        "aurora": "elim-victor",
+        "boomboys": "elim-victor",
+        "falcons": "4-1",
+        "gamerlegion": "1-4",
+        "huligani": "1-4",
+        "iron_wing": "elim-loser",
+        "lgd": "elim-victor",
+        "liquid": "elim-victor",
+        "nigma": "elim-loser",
+        "og": "0-4",
+        "resilience": "elim-loser",
+        "spirit": "elim-victor",
+        "vici": "elim-loser",
+        "vision": "4-0",
+        "xtreme": "elim-loser",
+        "yandex": "4-1"
+      },
+      "pre_lock_ev": 911.3
+    }
+  ]
+}

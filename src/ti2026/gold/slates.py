@@ -82,6 +82,91 @@ def _hist(k: np.ndarray, n_max: int) -> list[float]:
     return [round(float((k == i).mean()), 5) for i in range(n_max + 1)]
 
 
+# ------------------------------------------------------------- actual results
+
+def actual_buckets(con) -> dict[str, str] | None:
+    """Real bucket outcome per team, derived from completed group-stage series.
+
+    Swiss records come from pred.series stage='group_swiss' (series W/L per team —
+    the Swiss runs until 4 wins or 4 losses, exactly 39 series), elimination-round
+    outcomes from the 5 stage='group_elim' series. Teams that never play the elim
+    round are exactly the 4-0/4-1/1-4/0-4 finishers, so records + elim results
+    cover all six real buckets. Returns None until the group stage is fully
+    played; raises if the derived allocation violates the bucket capacities or
+    disagrees with a parsed pred.swiss_standings snapshot."""
+    from collections import Counter
+
+    swiss = con.execute(
+        """SELECT team1_key, team2_key, winner_key FROM pred.series
+           WHERE stage = 'group_swiss' AND completed
+             AND team1_key IS NOT NULL AND team2_key IS NOT NULL
+             AND winner_key IS NOT NULL"""
+    ).fetchall()
+    elim = con.execute(
+        """SELECT team1_key, team2_key, winner_key FROM pred.series
+           WHERE stage = 'group_elim' AND completed
+             AND team1_key IS NOT NULL AND team2_key IS NOT NULL
+             AND winner_key IS NOT NULL"""
+    ).fetchall()
+    if len(swiss) < 39 or len(elim) < 5:
+        return None
+    if len(swiss) > 39 or len(elim) > 5:
+        raise AssertionError(
+            f"group stage has {len(swiss)} swiss + {len(elim)} elim completed series "
+            "— expected exactly 39 + 5")
+
+    wins: Counter = Counter()
+    losses: Counter = Counter()
+    for t1, t2, w in swiss:
+        loser = t2 if w == t1 else t1
+        wins[w] += 1
+        losses[loser] += 1
+
+    buckets = load_buckets()
+    by_rule = {rule: bid for bid, _cap, rule, _label in buckets}
+    out: dict[str, str] = {}
+    for t1, t2, w in elim:
+        loser = t2 if w == t1 else t1
+        out[w] = by_rule["elim_survived"]
+        out[loser] = by_rule["elim_lost"]
+    for team in set(wins) | set(losses):
+        if team in out:
+            continue
+        rule = f"record={wins[team]}-{losses[team]}"
+        if rule not in by_rule:
+            raise AssertionError(
+                f"{team} finished {wins[team]}-{losses[team]} outside the elim round "
+                "but no bucket rule matches that record")
+        out[team] = by_rule[rule]
+
+    counts = Counter(out.values())
+    for bid, cap, _rule, _label in buckets:
+        if counts.get(bid, 0) != cap:
+            raise AssertionError(
+                f"actual bucket {bid} holds {counts.get(bid, 0)} teams, expected {cap}")
+
+    stand = con.execute(
+        """SELECT team_key, wins, losses FROM pred.swiss_standings
+           WHERE snapshot_ts = (SELECT max(snapshot_ts) FROM pred.swiss_standings)
+             AND team_key IS NOT NULL AND wins IS NOT NULL AND losses IS NOT NULL"""
+    ).fetchall()
+    known = set(wins) | set(losses)
+    for team, w, l_ in stand:
+        if team in known and (wins[team], losses[team]) != (w, l_):
+            raise AssertionError(
+                f"swiss record mismatch for {team}: series say {wins[team]}-{losses[team]}, "
+                f"standings snapshot says {w}-{l_}")
+    return out
+
+
+def score_slate(picks: dict[str, str], actuals: dict[str, str],
+                table: np.ndarray = GROUP_TABLE) -> tuple[int, float]:
+    """(#correct, realized points) for a bucket-assignment slate against the real
+    outcome. The escalating table converts the count — nothing is per-pick."""
+    n = sum(1 for t, b in picks.items() if actuals.get(t) == b)
+    return n, float(table[n])
+
+
 # -------------------------------------------------------------- group buckets
 
 def group_core(M: np.ndarray, caps: list[int], table: np.ndarray,
@@ -148,13 +233,20 @@ def group_core(M: np.ndarray, caps: list[int], table: np.ndarray,
     return best_assign, best_ev, naive, naive_ev
 
 
-def latest_run(con, table: str) -> str:
-    row = con.execute(
-        f"""SELECT run_id FROM gold.sim_meta
-            WHERE run_id IN (SELECT DISTINCT run_id FROM gold.{table})
-            ORDER BY created_at DESC LIMIT 1"""
-    ).fetchone()
+def latest_run(con, table: str, stage: str | None = None) -> str | None:
+    """Most recent sim run that wrote to gold.{table}. With `stage`, only runs of
+    that sim_meta.stage_state qualify and absence returns None (a state, not an
+    error — e.g. `post_groups` simply hasn't been run yet)."""
+    q = f"""SELECT run_id FROM gold.sim_meta
+            WHERE run_id IN (SELECT DISTINCT run_id FROM gold.{table})"""
+    args: list[str] = []
+    if stage:
+        q += " AND stage_state = ?"
+        args.append(stage)
+    row = con.execute(q + " ORDER BY created_at DESC LIMIT 1", args).fetchone()
     if not row:
+        if stage:
+            return None
         raise SystemExit(f"no draws in gold.{table} — run `ti build-gold` or `ti sim` first")
     return row[0]
 

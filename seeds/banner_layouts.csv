@@ -1,4 +1,7 @@
-role,slots,source,note
-core,red|red|green,ti2025-precedent,TI2025 guides: cores 2 red + 1 green; TI2026 duo-card count unconfirmed — screenshot the banner to verify
-mid,red|green|blue,ti2025-precedent,TI2025 guides: mids all three colors; TI2026 unconfirmed
-support,blue|blue|green,ti2025-precedent,TI2025 guides: supports 2 blue + 1 green; TI2026 unconfirmed
+role,period,slots,source,note
+core,p1,red|green|red,client-confirmed-2026-08-17,Group Stage banner: 3 emblems; order confirmed alongside the P2 reveal (matters for adjacency traits)
+mid,p1,red|blue|green,client-confirmed-2026-08-17,Group Stage banner: 3 emblems
+support,p1,blue|green|blue,client-confirmed-2026-08-17,Group Stage banner: 3 emblems
+core,p2,red|green|red|green|red,client-confirmed-2026-08-17,Main Event: first three carry over + 2 slots added (3R+2G); user verified in-client + 3 guide sources agree
+mid,p2,red|blue|green|red|green,client-confirmed-2026-08-17,Main Event: 2R+2G+1B
+support,p2,blue|green|blue|green|blue,client-confirmed-2026-08-17,Main Event: 3B+2G; roll tokens are 40 (groups) + separate 30 (main event)

@@ -264,6 +264,14 @@
   .risk-hi .cand.c2 .tm{color:var(--dire)}
   .risk-hi .cand.c2 .p{color:var(--ink)}
   .risk-hi .cand.c2 .mini i{background:var(--dire-dim)}
+  /* bracket lab: clickable winner rows */
+  .cand.pickable{cursor:pointer;border-left:2px solid transparent;padding-left:3px}
+  .cand.pickable:hover{border-left-color:var(--aegis-dim);background:rgba(201,163,92,.06)}
+  .cand.on{border-left:2px solid var(--aegis);padding-left:3px;background:rgba(201,163,92,.10)}
+  .cand.on .tm{color:var(--aegis-hi)}
+  .cand.ghosted .tm{color:var(--faint)}
+  .slotflow.locked{border-color:var(--radiant-dim)}
+  .slotflow.locked .sid .lockmark{color:var(--radiant)}
 
   /* fantasy hero */
   .fhero{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin:2px 0 14px}
@@ -367,14 +375,14 @@
 <header>
   <div class="hwrap">
     <div class="brand">The International 2026<small>Gold Intelligence · Shanghai</small></div>
-    <div class="lock"><div class="lbl">Predictions lock</div><div class="val" id="lock">—</div></div>
+    <div class="lock"><div class="lbl" id="lockl">Predictions lock</div><div class="val" id="lock">—</div></div>
   </div>
   <nav id="tabs" role="tablist">
     <div class="tgroup"><span class="tglabel">General</span><div class="tbtns">
       <button role="tab" aria-selected="true" data-t="overview">Overview</button>
       <button role="tab" aria-selected="false" data-t="form">Teams · Players</button>
     </div></div>
-    <div class="tgroup"><span class="tglabel">Group Stage · Aug 13–16</span><div class="tbtns">
+    <div class="tgroup"><span class="tglabel" id="tgl-groups">Group Stage · Aug 13–16</span><div class="tbtns">
       <button role="tab" aria-selected="false" data-t="group">Group Slate</button>
       <button role="tab" aria-selected="false" data-t="fantasy">Fantasy · P1</button>
       <button role="tab" aria-selected="false" data-t="matchups">Matchups</button>
@@ -399,8 +407,8 @@
         <div id="aegis"></div>
       </div>
       <div class="panel">
-        <h2>Group Stage Outlook</h2>
-        <div class="sub">Where each team's Swiss + elimination round lands, per draw share</div>
+        <h2>Group Stage Outlook <small id="outlook-tag" style="color:var(--faint);letter-spacing:.1em"></small></h2>
+        <div class="sub" id="outlook-sub">Where each team's Swiss + elimination round lands, per draw share</div>
         <div class="legend">
           <span><b style="background:var(--aegis-hi)"></b>4–0</span>
           <span><b style="background:var(--aegis-dim)"></b>4–1</span>
@@ -473,8 +481,17 @@
       <input type="range" class="tmrange" min="0" max="6" step="1" value="6"
              aria-label="Model as-of date — past frames show that month's consensus slate">
       <span class="tmval">NOW</span></div>
-    <div class="panel">
-      <h2>Group Stage Prediction Slate</h2>
+    <div class="panel" id="finalresult" hidden>
+      <h2>Final Result · scored</h2>
+      <div class="sub">The real bucket outcome (Swiss Aug 13–15 + Elimination Round Aug 16) and what every
+        pre-lock slate variant earned against it. The escalating table pays the <i>count</i> of correct
+        picks — 7 right is worth 1,800 pts, 8 would have been 2,520.</div>
+      <div class="stats" id="fr-scores"></div>
+      <div class="board" id="fr-board"></div>
+      <div class="footnote" id="fr-note"></div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <h2>Group Stage Prediction Slate <small style="color:var(--faint);letter-spacing:.1em" id="gslate-tag"></small></h2>
       <div class="sub">All 16 teams into Swiss-outcome buckets, optimized on joint simulation draws (the escalating table is convex — picks must land <i>together</i>). The dial: consistency floor on the left, pure EV, then <b style="color:var(--ink)">contrarian variants</b> — the best slate forced ≥2/4/6/8 picks away from consensus, with the EV cost of divergence shown honestly.</div>
       <div class="riskbox">
         <input type="range" id="grisk" min="0" max="4" step="1" value="2" aria-label="Risk temperature">
@@ -493,7 +510,7 @@
         </div>
       </div>
       <div class="board" id="gboard"></div>
-      <div class="footnote">Bucket set is the <b style="color:var(--ink)">real one</b>, captured from the client's compendium definition (league 19719): 4-0 ×1 · 4-1 ×2 · elim victor ×5 · elim loser ×5 · 1-4 ×2 · 0-4 ×1. Locks Aug 13 02:00 UTC. Gold left edge = pick differs from the MAX EV slate.</div>
+      <div class="footnote">Bucket set is the <b style="color:var(--ink)">real one</b>, captured from the client's compendium definition (league 19719): 4-0 ×1 · 4-1 ×2 · elim victor ×5 · elim loser ×5 · 1-4 ×2 · 0-4 ×1. <span id="gslate-lock">Locks Aug 13 02:00 UTC.</span> Gold left edge = pick differs from the MAX EV slate.</div>
     </div>
     <div class="panel" style="margin-top:16px">
       <h2>Bucket Odds · every team × every bucket</h2>
@@ -501,8 +518,8 @@
       <div style="overflow-x:auto"><table class="rtable" id="bmx"></table></div>
     </div>
     <div class="panel" style="margin-top:16px">
-      <h2>Slate Lab · build your own</h2>
-      <div class="sub">Arm a team from the pool, then click a bucket — or click a <b style="color:var(--ink)">watermark</b> (the dimmed most-likely remaining team) to accept it. Click a placed team to remove it. A team can hold exactly one slot. Scored on the optimizer's own joint simulation draws: the escalating table is convex, so the EV prices whole-slate outcomes, never per-pick odds.</div>
+      <h2>Slate Lab · what would have scored</h2>
+      <div class="sub">Arm a team from the pool, then click a bucket — or click a <b style="color:var(--ink)">watermark</b> (the dimmed most-likely remaining team) to accept it. Click a placed team to remove it. A team can hold exactly one slot. Scored two ways: pre-lock EV on the optimizer's joint simulation draws, and — now that groups are done — <b style="color:var(--ink)">actual points against the real outcome</b>.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button class="tchip" id="labopt">Start from MAX EV</button>
         <button class="tchip" id="labfill">Auto-fill rest</button>
@@ -522,28 +539,53 @@
              aria-label="Model as-of date — slot favorites refit to that month's data">
       <span class="tmval">NOW</span></div>
     <div class="panel">
-      <h2>Main Event · Double Elimination</h2>
-      <div class="sub">Slot favorites simulated across all group-stage outcomes — the 8 entrants vary per draw.
+      <h2>Main Event · Bracket Lab</h2>
+      <div class="sub" id="bsub">Slot favorites simulated across all group-stage outcomes — the 8 entrants vary per draw.
         Picks open <b style="color:var(--ink)">Aug 17 01:00 UTC</b> and lock <b style="color:var(--ink)">Aug 20 02:00 UTC</b> (client compendium definition); the optimizer then searches all 16,384 consistent fills exhaustively.
         Hover any series to trace where its winner and loser go.
         <span id="bmode" style="color:var(--aegis)"></span></div>
-      <button id="bupset" class="tchip" title="Highlight each slot's second-most-likely winner — the live upset threat in every box">Upset Watch<small>highlight challengers</small></button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px" id="bctl" hidden>
+        <button class="tchip" id="bmaxev">Start from MAX EV</button>
+        <button class="tchip" id="bchalk">Chalk<small>stronger team wins every series</small></button>
+        <button class="tchip" id="bclear">Clear picks</button>
+      </div>
+      <div class="stats" id="bstats" hidden></div>
+      <div class="footnote" id="bfeed" style="margin:0 0 10px"></div>
+      <button id="bupset" class="tchip" title="Highlight each slot's less-likely winner — the live upset threat in every box">Upset Watch<small>highlight challengers</small></button>
       <div class="bwrap"><div id="bflow"></div></div>
+      <div class="footnote" id="bnote2"></div>
     </div>
   </section>
 
   <section id="tab-fantasy2" hidden>
     <div class="panel">
-      <h2>Main-Event Fantasy · Period 2 (preview)</h2>
-      <div class="sub">Rosters re-pick between periods; this board turns decision-grade once groups end (Aug 16) and the daily refresh re-simulates period 2 on the <b style="color:var(--ink)">real</b> 8-team bracket. Until then it is an early read: the same card bootstrap ranked by expected period-2 points across simulated main events — a team's odds of even <i>reaching</i> the bracket are already priced in. Coach titles: best pair per roster (AUTO).</div>
+      <h2>Main-Event Fantasy · Period 2 <small id="f2tag" style="color:var(--faint);letter-spacing:.1em"></small></h2>
+      <div class="sub" id="f2sub">Rosters re-pick between periods; this board turns decision-grade once groups end (Aug 16) and the daily refresh re-simulates period 2 on the <b style="color:var(--ink)">real</b> 8-team bracket. Until then it is an early read: the same card bootstrap ranked by expected period-2 points across simulated main events — a team's odds of even <i>reaching</i> the bracket are already priced in. Coach titles: best pair per roster (AUTO).</div>
+      <div class="titlebox" id="rlab2box" hidden>
+        <h3>P2 Roster Lab · pick a team per role from the 8 alive — every number below follows</h3>
+        <div id="rlab2"></div>
+      </div>
+      <div class="fhero" id="fhero2"></div>
       <div style="overflow-x:auto"><table class="rtable" id="rtable2"></table></div>
       <div class="footnote" id="fnote2"></div>
+    </div>
+    <div class="panel" style="margin-top:16px" id="bforge2panel" hidden>
+      <h2>P2 Banner Forge · five emblems per banner</h2>
+      <div class="sub">Main-event War Banners grow to <b style="color:var(--ink)">5 emblems</b> — your three group-stage emblems carry over and two slots are added (client-confirmed): core R-G-R-G-R · mid R-B-G-R-G · support B-G-B-G-B. You get <b style="color:var(--ink)">30 fresh roll tokens</b> for the main event. Each color group lists roll targets and priced fallbacks for the selected roster above.</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="bforge2"></div>
+      <div class="footnote" id="bforge2note"></div>
     </div>
   </section>
 
   <section id="tab-fantasy" hidden>
+    <div class="panel" id="p1actuals" hidden style="margin-bottom:16px">
+      <h2>Group Stage · Who Actually Performed</h2>
+      <div class="sub">Realized fantasy production across the Swiss + elimination round — all-18-stat base points per player (un-bannered; a real banner scores 3 of these, so read it as raw engine output). <b style="color:var(--ink)">bs</b> = best single series (sum of its top-2 games), the unit the client actually scores each period.</div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))" id="p1lead"></div>
+      <div class="footnote" id="p1leadnote"></div>
+    </div>
     <div class="panel">
-      <h2>Fantasy Roster Forge · Group Stage (Period 1)</h2>
+      <h2>Fantasy Roster Forge · Group Stage (Period 1) <small id="p1tag" style="color:var(--faint);letter-spacing:.1em"></small></h2>
       <div class="sub">Support duo / core duo / mid — one team per role slot, and <b style="color:var(--ink)">the same team may hold several slots</b> (client-confirmed). Scores bootstrapped from each card's real 2026 games along simulated tournament paths (top-2 games per series, best series per period). Slide toward CEILING to weight the 90th-percentile outcome — percentile payouts are convex, so some greed is rational. Rosters re-pick after groups: the period-2 board lives under <b style="color:var(--ink)">THE INTERNATIONAL → Fantasy · P2</b>.</div>
       <div class="riskbox">
         <input type="range" id="frisk" min="0" max="100" step="5" value="0" aria-label="Ceiling weight">
@@ -570,7 +612,7 @@
     </div>
     <div class="panel" style="margin-top:16px">
       <h2>Banner Forge · rolling pick #1's War Banners</h2>
-      <div class="sub">Emblem colors are <b style="color:var(--ink)">locked per role</b> (client tutorial). Rolling is a gamble, so each card lists <b style="color:var(--ink)">ranked stat options per color</b>: a color with 2 slots shows its 4 best stats, a color with 1 slot shows its 3 best — the top-n are the roll targets, the rest are priced fallbacks. Layouts are the TI2025 precedent (core 2R+1G · mid R+G+B · support 2B+1G) until a TI2026 banner screenshot confirms slot counts.</div>
+      <div class="sub">Emblem colors are <b style="color:var(--ink)">locked per role</b> (client tutorial). Rolling is a gamble, so each card lists <b style="color:var(--ink)">ranked stat options per color</b>: a color with 2 slots shows its 4 best stats, a color with 1 slot shows its 3 best — the top-n are the roll targets, the rest are priced fallbacks. Group-stage layouts are <b style="color:var(--ink)">client-confirmed</b>: core R-G-R · mid R-B-G · support B-G-B; main-event banners grow to five emblems — the P2 Forge lives under <b style="color:var(--ink)">THE INTERNATIONAL → Fantasy · P2</b>.</div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))" id="bforge"></div>
       <div class="footnote" id="bforgenote"></div>
     </div>
@@ -638,17 +680,25 @@ $("#tabs").addEventListener("click", e=>{
   document.querySelectorAll("main > section").forEach(s=>s.hidden = s.id !== "tab-"+b.dataset.t);
 });
 
-/* ---------- lock countdown ---------- */
+/* ---------- lock countdown (group lock -> bracket lock -> locked) ---------- */
+const POST = DATA.meta.stage === "post_groups";
 function tickLock(){
-  const ms = new Date(DATA.meta.lock_utc) - Date.now();
+  const target = POST ? (DATA.meta.bracket_lock_utc || DATA.meta.lock_utc) : DATA.meta.lock_utc;
+  $("#lockl").textContent = POST ? "Bracket + P2 lock" : "Predictions lock";
+  const ms = new Date(target) - Date.now();
   if (ms <= 0){ $("#lock").innerHTML = "<b>LOCKED</b>"; return; }
   const d = Math.floor(ms/864e5), h = Math.floor(ms%864e5/36e5), m = Math.floor(ms%36e5/6e4);
   $("#lock").innerHTML = `<b>${d}</b>d ${String(h).padStart(2,"0")}h ${String(m).padStart(2,"0")}m`;
 }
 tickLock(); setInterval(tickLock, 30000);
+if (POST) $("#tgl-groups").textContent = "Group Stage · Final";
 
 /* ---------- overview (time-machine aware) ---------- */
-$("#ndraws1").textContent = DATA.meta.n_draws.toLocaleString();
+$("#ndraws1").textContent = (DATA.meta.bracket_draws || DATA.meta.n_draws).toLocaleString();
+if (POST){
+  $("#outlook-tag").textContent = "pre-groups model · archived";
+  $("#outlook-sub").innerHTML = `What the model expected before Aug 13 — the <b style="color:var(--ink)">real outcome</b> lives on the Group Slate tab. Scrub the Time Machine to see earlier reads.`;
+}
 const SEG = [["p40","var(--aegis-hi)"],["p41","var(--aegis-dim)"],["adv_elim","var(--radiant-dim)"],
              ["out_elim","#3a4152"],["bottom3","var(--dire-dim)"]];
 const MKT = DATA.market || {probs:{}};
@@ -768,9 +818,16 @@ $("#grisklabels").addEventListener("click", e=>{
 $("#grisk").addEventListener("input", e=>renderGroup(+e.target.value));
 
 function renderSlate(s, past){
+  const actStat = s.actual_correct != null
+    ? `<div class="stat" style="border-color:var(--aegis-dim)" title="Scored against the real group-stage outcome"><div class="lbl">Actual result</div><div class="val">${s.actual_correct}<small> /16 → ${s.actual_points.toLocaleString()} pts</small></div></div>`
+    : "";
+  const preLock = s.locked && s.pre_lock_ev
+    ? `<div class="stat" title="EV at lock time (Aug 6 build) — the number the decision was made on"><div class="lbl">EV · at lock</div><div class="val">${Math.round(s.pre_lock_ev).toLocaleString()}</div></div>`
+    : "";
   $("#gstats").innerHTML = `
     <div class="stat"><div class="lbl">Objective</div><div class="val" style="font-size:13px;line-height:2.1">${s.goal}</div></div>
-    <div class="stat"><div class="lbl">Expected points</div><div class="val">${Math.round(s.ev).toLocaleString()}</div></div>
+    ${actStat}${preLock}
+    <div class="stat" title="${s.locked?"re-evaluated under today's model, which has since trained on the TI games — display only, the picks are frozen":"expected points on the joint draws"}"><div class="lbl">${s.locked?"EV · today's model":"Expected points"}</div><div class="val">${Math.round(s.ev).toLocaleString()}</div></div>
     <div class="stat"><div class="lbl">E[# correct]</div><div class="val">${s.e_correct.toFixed(2)}<small> /16</small></div></div>
     <div class="stat"><div class="lbl">P(≥5 correct)</div><div class="val">${pct(s.p5,0)}</div></div>
     <div class="stat"><div class="lbl">P(≥8 correct)</div><div class="val">${pct(s.p8)}</div></div>
@@ -791,11 +848,16 @@ function renderSlate(s, past){
        Each extra correct pick is worth more than the last, so the dial trades a lower floor for
        scenario-coherent picks that land <i>together</i>.
        This slate differs from MAX EV on <b style="color:var(--aegis-hi)">${nDiff}</b> team(s).`;
+  const actB = (DATA.actuals || {}).buckets;
   $("#gboard").innerHTML = DATA.buckets.map(b=>{
     const members = keys.filter(k=>s.picks[k]===b.id).sort((a,c)=>s.probs[c]-s.probs[a]);
     return `<div class="bucket"><h3><span>${b.label}</span><span class="cap">×${b.cap}</span></h3>
-      ${members.map(k=>`<div class="chip${s.picks[k]!==BASE.picks[k]?" moved":""}">
-        <span class="tm">${tlogo(k)}${name[k]}</span><span class="p">${pct(s.probs[k],0)}</span></div>`).join("")}
+      ${members.map(k=>{
+        const mark = actB ? (actB[k]===b.id
+          ? ` <span style="color:var(--radiant)" title="correct — the team really landed here">✓</span>`
+          : ` <span style="color:var(--dire)" title="missed — really finished ${actB[k]}">✗</span>`) : "";
+        return `<div class="chip${s.picks[k]!==BASE.picks[k]?" moved":""}">
+        <span class="tm">${tlogo(k)}${name[k]}</span><span class="p">${pct(s.probs[k],0)}${mark}</span></div>`;}).join("")}
     </div>`;
   }).join("");
 }
@@ -814,6 +876,37 @@ function refreshGroup(){
   }
 }
 renderGroup(IMAXEV);
+
+/* ---------- Final Result: real buckets + every variant scored ---------- */
+{
+  const ACT = DATA.actuals;
+  if (ACT){
+    $("#finalresult").hidden = false;
+    $("#gslate-tag").textContent = "pre-lock archive";
+    $("#gslate-lock").innerHTML = `<b style="color:var(--ink)">Locked Aug 13 02:00 UTC</b> — scored in the panel above.`;
+    $("#fr-scores").innerHTML = ACT.slates_scored.map(s=>
+      `<div class="stat"${s.label==="MAX EV"?' style="border-color:var(--aegis-dim)"':""}>
+        <div class="lbl">${s.label}</div>
+        <div class="val">${s.n_correct}<small> /16</small></div>
+        <div class="lbl" style="letter-spacing:.1em;color:var(--aegis-hi)">${s.points.toLocaleString()} pts</div>
+      </div>`).join("");
+    $("#fr-board").innerHTML = DATA.buckets.map(b=>{
+      const members = keys.filter(k=>ACT.buckets[k]===b.id);
+      return `<div class="bucket"><h3><span>${b.label}</span><span class="cap">×${b.cap}</span></h3>
+        ${members.map(k=>{
+          const hit = BASE.picks[k]===b.id;
+          return `<div class="chip${hit?" moved":""}" title="${hit?"MAX EV called this":`MAX EV had ${name[k]} as ${BASE.picks[k]}`}">
+            <span class="tm">${tlogo(k)}${name[k]}</span>
+            <span class="p" style="color:${hit?"var(--radiant)":"var(--dire)"}">${hit?"✓":"✗ "+BASE.picks[k]}</span></div>`;
+        }).join("")}
+      </div>`;
+    }).join("");
+    $("#fr-note").innerHTML = `✓ = the MAX EV slate called this team's bucket; ✗ shows what it picked instead.
+      Elimination round: Yandex 2-1 LGD (reverse sweep) · Falcons 2-0 Vici · BoomBoys 2-0 Aurora ·
+      Spirit 2-1 Resilience · Iron Wing 2-0 GamerLegion. The headline misses: Yandex picked 4-0 but
+      stumbled to 2-3 before surviving the elim round, and Nigma — picked elim-loser — finished 4-1.`;
+  }
+}
 
 /* ---------- bracket: true double-elim flow ---------- */
 const BW=188, CW=241, BC=76;            // box width, column pitch, box height for line math
@@ -838,7 +931,7 @@ const _BWIDTH = BX(4)+BW+2, _BHEIGHT = 716;
 /* every elbow's vertical runs in its own hand-placed gutter lane, so no two edges stack */
 const LANE = {"R1M1>R2M1":206,"R1M2>R2M1":206,"R1M3>R2M2":206,"R1M4>R2M2":206,
   "R1M1>R1M5":234,"R1M2>R1M5":234,"R1M3>R1M6":220,"R1M4>R1M6":220,
-  "R2M1>R4M1":466,"R2M2>R4M1":466,"R2M1>R2M3":452,"R2M2>R2M4":438,
+  "R2M1>R4M1":466,"R2M2>R4M1":466,"R2M1>R2M4":452,"R2M2>R2M3":438,
   "R2M3>R3M1":696,"R2M4>R3M1":696,"R4M1>R5M1":950,"R4M1>R4M2":938};
 const _BLINES = (() => {
   const cy = s => BPOS[s][1] + BC/2;
@@ -864,9 +957,24 @@ const _BLINES = (() => {
     <marker id="mal" viewBox="0 0 6 6" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0 0L6 3L0 6z" fill="var(--dire-dim)" stroke="none"/></marker>
   </defs>` + lines;
 })();
-function renderBracket(){
+const _BLABS = RLABEL.map(([c,y,t])=>
+  `<div class="rlab" style="left:${BX(c)}px;top:${y}px">${t}</div>`).join("");
+const _BNOTE = `<div class="bnote" style="left:0;top:512px;width:${BW-4}px">
+    <b>Lower Bracket</b>
+    <span>one more loss down here and the run is over — the survivor climbs into the Grand Final</span>
+    <span><i class="lw"></i>winner advances</span>
+    <span><i class="ll"></i>loser drops down</span>
+  </div>`;
+function _bframe(boxes){
+  const bf = $("#bflow");
+  bf.style.width = _BWIDTH+"px"; bf.style.height = _BHEIGHT+"px";
+  bf.innerHTML = `<svg width="${_BWIDTH}" height="${_BHEIGHT}" viewBox="0 0 ${_BWIDTH} ${_BHEIGHT}">${_BLINES}</svg>` + _BLABS + _BNOTE + boxes;
+}
+
+/* archive mode: sim-marginal favorites (pre-groups chained draws / TM rewind) */
+function renderBracketArchive(){
   const sm = SNAP().slot_marg;
-  const boxes = DATA.slots.map(s=>{
+  _bframe(DATA.slots.map(s=>{
     const [c,y] = BPOS[s.slot];
     const cands = (sm[s.slot]||[]).slice(0,2);
     const mx = Math.max(...cands.map(x=>x[1]), .01);
@@ -878,20 +986,142 @@ function renderBracket(){
         <span class="mini"><i style="width:${100*p/mx}%"></i></span>
         <span class="p">${pct(p,0)}</span></div>`).join("")}
     </div>`;
+  }).join(""));
+}
+
+/* ---------- Bracket Lab: pick every series on the REAL bracket ---------- */
+const BRK = DATA.bracket;   // null until a post-groups fixed-entrant run exists
+const BPICK = {};           // slot -> picked winner team_key
+let _blab = null;           // precomputed sample/prob structures
+if (BRK){
+  const NDB = BRK.sample.length, NS14 = BRK.slot_order.length;
+  const EIDX = {}; BRK.entrants.forEach((k,i)=>EIDX[k]=i);
+  const SOI = {}; BRK.slot_order.forEach((s,i)=>SOI[s]=i);
+  const SAMP = new Uint8Array(NDB * NS14);
+  BRK.sample.forEach((row,d)=>{ for(let s=0;s<NS14;s++) SAMP[d*NS14+s] = row.charCodeAt(s)-48; });
+  const WINP = Array.from({length:NS14}, ()=>new Float32Array(8));
+  for (let d=0; d<NDB; d++) for (let s=0; s<NS14; s++) WINP[s][SAMP[d*NS14+s]]++;
+  WINP.forEach(a=>{ for(let i=0;i<8;i++) a[i]/=NDB; });
+  _blab = {NDB, NS14, EIDX, SOI, SAMP, WINP};
+  Object.assign(BPICK, BRK.fills[0].picks);          // prefill = MAX EV -> deviation 0
+}
+function bscoreOf(picks){
+  const {NDB, NS14, EIDX, SAMP} = _blab;
+  const pk = BRK.slot_order.map(s=>{ const w = picks[s]; return w!=null && EIDX[w]!=null ? EIDX[w] : -1; });
+  let ev=0, ke=0;
+  for (let d=0; d<NDB; d++){
+    let k=0; const b=d*NS14;
+    for (let s=0; s<NS14; s++) if (pk[s]>=0 && SAMP[b+s]===pk[s]) k++;
+    ev += BRK.table[k]; ke += k;
+  }
+  return [ev/NDB, ke/NDB];
+}
+/* one forward pass: resolves each slot's two entrants from real fills + upstream
+   picks (topological order), locks played series to the real winner, and drops
+   any pick its own entrants no longer support (upstream flip -> downstream clear) */
+function bpass(picks, chooser){
+  const ent = {}, cnt = {};
+  const put = (t,k)=>{ const a = ent[t] = ent[t]||[null,null]; const i = cnt[t]||0; if(i<2) a[i]=k; cnt[t]=i+1; };
+  DATA.slots.forEach(s=>{
+    const real = (s.t1 && s.t2) ? [s.t1, s.t2] : (BRK.qf||{})[s.slot];  // Liquipedia fill, else the sim's own QF pairing
+    if (real){ ent[s.slot]=[real[0],real[1]]; cnt[s.slot]=2; }
+  });
+  DATA.slots.forEach(s=>{
+    const sl = s.slot, pair = ent[sl]||[null,null];
+    if (s.w) picks[sl] = s.w;                                       // real result: locked
+    else {
+      if (picks[sl] && !(pair[0]===picks[sl] || pair[1]===picks[sl])) delete picks[sl];
+      if (!picks[sl] && chooser){ const c = chooser(sl, pair); if (c) picks[sl] = c; }
+    }
+    const w = picks[sl]||null;
+    const l = (w && pair[0] && pair[1]) ? (pair[0]===w ? pair[1] : pair[0]) : null;
+    if (s.fw) put(s.fw, w);
+    if (s.fl) put(s.fl, l);
+  });
+  return ent;
+}
+function renderBracketLab(){
+  const ent = bpass(BPICK, null);
+  const {SOI, EIDX, WINP} = _blab;
+  const lock = new Set(DATA.slots.filter(s=>s.w).map(s=>s.slot));
+  const boxes = DATA.slots.map(s=>{
+    const [c,y] = BPOS[s.slot];
+    const pair = ent[s.slot]||[null,null];
+    const probs = pair.map(k=> k!=null && EIDX[k]!=null ? WINP[SOI[s.slot]][EIDX[k]] : 0);
+    const mxp = Math.max(...probs, .01);
+    const isLock = lock.has(s.slot);
+    const c2i = probs[0] >= probs[1] ? 1 : 0;      // lower-prob row carries the upset class
+    const rows = pair.map((k,i)=>{
+      if (!k) return `<div class="cand ghosted"><span class="tm">—</span><span class="mini"></span><span class="p"></span></div>`;
+      const on = BPICK[s.slot]===k;
+      const click = isLock ? "" : " pickable";
+      const mark = isLock && on ? " ✓" : "";
+      return `<div class="cand${on?" on":""}${click}${i===c2i?" c2":" c1"}" data-slot="${s.slot}" data-k="${k}"
+          title="${name[k]} wins this series in ${pct(probs[i])} of simulated brackets${isLock?" — series played, result locked":on?" — your pick":" — click to pick"}">
+        <span class="tm">${tlogo(k,14)}${tag[k]}${mark}</span>
+        <span class="mini"><i style="width:${100*probs[i]/mxp}%"></i></span>
+        <span class="p">${pct(probs[i],0)}</span></div>`;
+    }).join("");
+    return `<div class="slotflow ${s.slot==="R5M1"?"gfbox":""}${isLock?" locked":""}" data-slot="${s.slot}"
+        style="left:${BX(c)}px;top:${y}px;width:${BW}px">
+      <div class="sid"><span>${SLOT_NAME[s.slot]||s.slot}</span><span>${isLock?`<span class="lockmark">✓ </span>`:""}BO${s.bo}</span></div>
+      ${rows}</div>`;
   }).join("");
-  const labs = RLABEL.map(([c,y,t])=>
-    `<div class="rlab" style="left:${BX(c)}px;top:${y}px">${t}</div>`).join("");
-  const note = `<div class="bnote" style="left:0;top:512px;width:${BW-4}px">
-      <b>Lower Bracket</b>
-      <span>one more loss down here and the run is over — the survivor climbs into the Grand Final</span>
-      <span><i class="lw"></i>winner advances</span>
-      <span><i class="ll"></i>loser drops down</span>
-    </div>`;
-  const bf = $("#bflow");
-  bf.style.width = _BWIDTH+"px"; bf.style.height = _BHEIGHT+"px";
-  bf.innerHTML = `<svg width="${_BWIDTH}" height="${_BHEIGHT}" viewBox="0 0 ${_BWIDTH} ${_BHEIGHT}">${_BLINES}</svg>` + labs + note + boxes;
+  _bframe(boxes);
+  const nPicked = BRK.slot_order.filter(s=>BPICK[s]).length;
+  const [ev, ek] = bscoreOf(BPICK);
+  const [evOpt] = bscoreOf(BRK.fills[0].picks);
+  const dev = evOpt > 0 ? (evOpt - ev)/evOpt : 0;
+  const champ = BPICK.R5M1;
+  $("#bstats").hidden = false; $("#bctl").hidden = false;
+  $("#bstats").innerHTML = `
+    <div class="stat"><div class="lbl">Picked</div><div class="val">${nPicked}<small> / 14</small></div></div>
+    <div class="stat" title="mean of the escalating bracket table over correct-pick counts on a 2,000-draw sample of the post-groups sim"><div class="lbl">Slate EV</div><div class="val">${Math.round(ev).toLocaleString()}<small> pts</small></div></div>
+    <div class="stat"><div class="lbl">E[correct]</div><div class="val">${ek.toFixed(2)}<small> /14</small></div></div>
+    <div class="stat" title="EV gap vs the optimizer's best fill, both scored on the same draws"><div class="lbl">vs optimal</div>
+      <div class="val" style="${dev>0.02?"color:var(--dire)":"color:var(--radiant)"}">${nPicked===14?`−${(100*dev).toFixed(1)}%`:`<small>pick all 14</small>`}</div></div>
+    <div class="stat"><div class="lbl">Your champion</div><div class="val" style="font-size:15px;line-height:1.8">${champ?`${tlogo(champ,15)}${name[champ]}`:"—"}</div></div>`;
+}
+function renderBracket(){
+  const atNow = TIDX === HIST.length-1;
+  if (BRK && atNow){ renderBracketLab(); }
+  else {
+    $("#bstats").hidden = true; $("#bctl").hidden = true;
+    if (BRK) $("#bfeed").innerHTML = `<span style="color:var(--faint)">Time-machine frame — archived sim view; return to NOW for the interactive lab.</span>`;
+    renderBracketArchive();
+  }
 }
 renderBracket();
+if (BRK){
+  $("#bflow").addEventListener("click", e=>{
+    const row = e.target.closest(".cand.pickable[data-slot]");
+    if (!row) return;
+    const slot = row.dataset.slot, k = row.dataset.k;
+    BPICK[slot] = k;
+    $("#bfeed").innerHTML = `${SLOT_NAME[slot]||slot}: <b style="color:var(--aegis-hi)">${name[k]}</b> — downstream picks that relied on the other outcome were cleared.`;
+    renderBracket();
+  });
+  $("#bmaxev").addEventListener("click", ()=>{
+    Object.keys(BPICK).forEach(k=>delete BPICK[k]);
+    Object.assign(BPICK, BRK.fills[0].picks);
+    $("#bfeed").innerHTML = `loaded the optimizer's MAX EV fill (EV ${Math.round(BRK.fills[0].ev).toLocaleString()} on its full draw set) — champion ${name[BRK.fills[0].champion]}.`;
+    renderBracket();
+  });
+  $("#bchalk").addEventListener("click", ()=>{
+    Object.keys(BPICK).forEach(k=>delete BPICK[k]);
+    bpass(BPICK, (sl, pair)=> (pair[0]&&pair[1])
+      ? (keys.indexOf(pair[0]) < keys.indexOf(pair[1]) ? pair[0] : pair[1]) : null);
+    $("#bfeed").innerHTML = `chalk fill: the model-stronger team wins every series (server-side chalk EV ${Math.round(BRK.chalk_ev).toLocaleString()} pts).`;
+    renderBracket();
+  });
+  $("#bclear").addEventListener("click", ()=>{
+    Object.keys(BPICK).forEach(k=>delete BPICK[k]);
+    $("#bfeed").innerHTML = "picks cleared — played series stay locked to their real result.";
+    renderBracket();
+  });
+  $("#bsub").innerHTML = `The real 8-team bracket. <b style="color:var(--ink)">Click a team to pick it as that series' winner</b> — winners and losers propagate along the lines; flipping an upstream series clears downstream picks it invalidated. Percentages = share of ${DATA.meta.bracket_draws ? DATA.meta.bracket_draws.toLocaleString() : ""} simulated brackets the team wins that series. Picks lock <b style="color:var(--ink)">Aug 20 02:00 UTC</b>. Hover any series to trace where its winner and loser go. <span id="bmode" style="color:var(--aegis)"></span>`;
+  $("#bnote2").innerHTML = `Scored on a 2,000-draw sample of run <span class="num">${BRK.run}</span> (expect small Monte-Carlo wobble vs the optimizer's full-set EVs). Optimizer top fills: ${BRK.fills.slice(0,3).map((f,i)=>`#${i+1} EV ${Math.round(f.ev).toLocaleString()} → ${name[f.champion]}`).join(" · ")} · chalk ${Math.round(BRK.chalk_ev).toLocaleString()}.`;
+}
 /* hover a series box: light up its feeds, dim the rest */
 const _bfEl = $("#bflow");
 function _btrace(slot){
@@ -912,9 +1142,15 @@ function renderBracketRisk(v){
 
 /* ---------- fantasy ---------- */
 const R = DATA.rosters;   // [supIdx, coreIdx, midIdx, ev, sd, q90, ev2]
+const R2 = DATA.rosters2; // post-groups run: [supIdx, coreIdx, midIdx, ev_p2, sd_p2, q90_p2] — 8 alive teams only
+const C2 = DATA.cards2;   // post-groups card meta (5-emblem P2 layouts)
+const ROWIX2 = R2 ? new Map(R2.map((r,i)=>[`${r[0]},${r[1]},${r[2]}`, i])) : null;
 const KIND_LABEL = {support:"Support duo", core:"Core duo · safe + off", mid:"Midlane"};
 function cardInfo(teamKey, kind){
   return DATA.cards[teamKey+"|"+kind] || {stats:[],players:[],n:0,joint:true,ev1:0,ev2:0};
+}
+function cardInfo2(teamKey, kind){
+  return (C2||{})[teamKey+"|"+kind] || {stats:[],players:[],n:0,joint:true,ev1:0,ev2:0};
 }
 
 /* coach titles: per-card EV under every prefix x suffix combo came out of the
@@ -1058,7 +1294,14 @@ function renderFantasy(v){
   ACTIVE = b.combo;
   renderTitles(b.r[3], b.evT);
   renderRosterLab(b, rank, ranked[0]);
-  const p2ev = BESTC2 ? Math.round(BESTC2[b.i][1] || b.r[6]) : b.r[6];
+  let p2line;
+  if (R2){
+    const ix = ROWIX2.get(SHOWN3.join(","));
+    p2line = ix != null
+      ? `main-event EV <b>${Math.round((BESTC2 && BESTC2[ix] && BESTC2[ix][1]) || R2[ix][3]).toLocaleString()}</b> on the real bracket — see Fantasy · P2`
+      : `main-event EV <b style="color:var(--dire)">0</b> — this roster holds an eliminated team; re-pick for P2`;
+  }
+  const p2ev = R2 ? null : (BESTC2 ? Math.round(BESTC2[b.i][1] || b.r[6]) : b.r[6]);
   $("#fhero").innerHTML =
     heroCard("support", keys[b.r[0]]) + heroCard("core", keys[b.r[1]]) + heroCard("mid", keys[b.r[2]]) +
     `<div class="fcard sum"><div class="kind">${SEL ? "Roster line — your pick" : "Roster line — pick #1"}</div>
@@ -1066,7 +1309,7 @@ function renderFantasy(v){
       <div class="cev">expected points, period 1, wearing <b>${titleName(b.combo, !TSEL.auto)}</b></div>
       <div class="cev">rank <b>#${rank.toLocaleString()}</b> of ${R.length.toLocaleString()} at this dial${rank>1?` · <b>−${Math.round(ranked[0].evT-b.evT).toLocaleString()}</b> EV vs best`:""}</div>
       <div class="cev">untitled EV <b>${b.r[3].toLocaleString()}</b> · ceiling (q90) <b>${Math.round(b.q90T).toLocaleString()}</b> · swing <b>±${b.r[4].toLocaleString()}</b></div>
-      <div class="cev">main-event EV <b>${p2ev.toLocaleString()}</b>${BESTC2?" (titled)":""} — rosters re-pick after groups</div></div>`;
+      <div class="cev">${R2 ? p2line : `main-event EV <b>${(p2ev||0).toLocaleString()}</b>${BESTC2?" (titled)":""} — rosters re-pick after groups`}</div></div>`;
   $("#rtable").innerHTML = `<tr><th></th><th>Support duo</th><th>Core duo</th><th>Mid</th>
     <th style="text-align:right" title="Expected fantasy points in period 1 (group stage) under the active coach titles — small label shows the pair used">EV·P1 titled</th>
     <th style="text-align:right" title="Standard deviation of the period-1 score (untitled)">swing</th>
@@ -1097,36 +1340,46 @@ $("#tprefix").addEventListener("click", titleClick);
 $("#tsuffix").addEventListener("click", titleClick);
 $("#fnote").innerHTML = `Ranked over all ${R.length.toLocaleString()} legal team-triples on ${DATA.meta.n_paths.toLocaleString()} tournament paths (run <span class="num">${DATA.meta.fantasy_run}</span>). Card EVs use each card's best legal 3 stats under the role's color-locked banner layout (core 2R+1G · mid R+G+B · support 2B+1G, TI2025 precedent); quality tiers and emblem traits still layer on top — see the Banner Forge below. Coach-title multipliers are applied per sampled game inside the bootstrap (so short-game / loss-game score correlations are respected); hero color/attribute tags come from the game client's own npc_heroes data (${TITLES.tagged_heroes} heroes tagged, source <span class="num">${TITLES.tag_source || "pending"}</span> — re-extract after client patches), prefix and suffix assumed to stack multiplicatively; "the Cruel" uses a ~${Math.round(TITLES.cruel_p*100)}% own-fountain-death estimate (unobservable in parsed data). Condition coverage: FB time + Tormentor deaths known for ${(TITLES.rates.coverage*100).toFixed(1)}% of pool games. Thin duos are blended with a position-wide prior. Same-team stacks share the team's simulated series path (correlated draws), but cards sample game scores independently within a series — a stack's true swing is somewhat higher than shown.`;
 
-/* banner forge: pick #1's recommended banners under color-locked layouts */
+/* banner forge: recommended banners under color-locked layouts (3 slots in P1,
+   5 in P2 — the trait math is slot-count generic: adjacency = the chain order) */
 const TRAITS = ["benevolent","vampiric","fractal","unique","friendly"];
 function traitGain(m, traits){          // additive bonuses, quality-independent
-  const b = [0,0,0];
+  const n = traits.length;
+  const b = new Array(n).fill(0);
   const nFriendly = traits.filter(t=>t==="friendly").length;
   const nUnique = traits.filter(t=>t==="unique").length;
   traits.forEach((t,i)=>{
-    const nb = [i-1,i+1].filter(j=>j>=0&&j<3);
+    const nb = [i-1,i+1].filter(j=>j>=0&&j<n);
     if(t==="benevolent") nb.forEach(j=>b[j]+=.20);
     else if(t==="vampiric"){ b[i]+=.50; nb.forEach(j=>b[j]-=.10); }
     else if(t==="fractal") b[i]+=.60;
     else if(t==="unique"){ if(nUnique===1) b[i]+=.30; }
     else if(t==="friendly"){ if(nFriendly>=3) b[i]+=.50; }
   });
-  return b[0]*m[0]+b[1]*m[1]+b[2]*m[2];
+  return b.reduce((a,x,i)=>a + x*(m[i]||0), 0);
 }
 function bestTraits(m){
+  const n = m.length;
   let best=[], seen=new Set();
-  for(const t0 of TRAITS) for(const t1 of TRAITS) for(const t2 of TRAITS){
-    const g = traitGain(m,[t0,t1,t2]);
-    const label = [t0,t1,t2].join(" · ");
-    best.push({g, label});
+  const combo = new Array(n).fill(0);
+  const total = Math.pow(TRAITS.length, n);
+  for (let c = 0; c < total; c++){
+    let x = c;
+    for (let i = 0; i < n; i++){ combo[i] = TRAITS[x % TRAITS.length]; x = Math.floor(x / TRAITS.length); }
+    best.push({g: traitGain(m, combo), label: combo.join(" · ")});
   }
   best.sort((a,b)=>b.g-a.g);
   return best.filter(x=>{const k=Math.round(x.g); if(seen.has(k))return false; seen.add(k); return true;}).slice(0,2);
 }
 function renderBannerForge(si, ci, mi){
+  renderForgeInto("#bforge", "#bforgenote", [si, ci, mi], cardInfo,
+    `Quality multiplies a slot by +10/30/60/100/150% at Tiers I–V (push Tiers into the highest-pts slot); trait advice assumes additive stacking and Fractal's distinct-tiers condition. Roll odds are not modeled.`);
+}
+function renderForgeInto(sel, noteSel, triple, infoFn, extraNote){
+  const [si, ci, mi] = triple;
   const picks = [["support",keys[si]],["core",keys[ci]],["mid",keys[mi]]];
-  $("#bforge").innerHTML = picks.map(([kind,k])=>{
-    const c = cardInfo(k, kind);
+  $(sel).innerHTML = picks.map(([kind,k])=>{
+    const c = infoFn(k, kind);
     if (!c.slots || !c.opts) return "";
     const groups = c.opts.map(g=>{
       const kept = g.opts.slice(0, g.n);
@@ -1152,7 +1405,7 @@ function renderBannerForge(si, ci, mi){
         (+${Math.round(100*combos[0].g/base)}%)${combos[1]?`<br>then: ${combos[1].label} +${Math.round(combos[1].g).toLocaleString()}`:""}</div>
       ${fit}</div>`;
   }).join("");
-  $("#bforgenote").innerHTML = `Read per color: a group with n slots keeps its top-n stats (the roll targets the EV model scores); the extra rows are ranked fallbacks, each priced as the pts/game lost if it replaces the weakest kept stat of that color. Small −delta → accept the roll and save tokens; big −delta → keep rolling. Quality multiplies a slot by +10/30/60/100/150% at Tiers I–V (push Tiers into the highest-pts slot); trait advice assumes additive stacking and Fractal's distinct-tiers condition. Roll odds are not modeled. Screenshot each role's full banner in-client to confirm the TI2026 slot layouts (currently the TI2025 precedent).`;
+  $(noteSel).innerHTML = `Read per color: a group with n slots keeps its top-n stats (the roll targets the EV model scores); the extra rows are ranked fallbacks, each priced as the pts/game lost if it replaces the weakest kept stat of that color. Small −delta → accept the roll and save tokens; big −delta → keep rolling. ${extraNote}`;
 }
 
 /* card market: top-5 per slot with EV margins, under the active titles */
@@ -1555,14 +1808,50 @@ renderForm();
     ${btHtml}
     ${mktLine}
     <span><b>build</b> ${m.as_of} · run ${m.group_run} · ${m.n_draws.toLocaleString()} draws</span>
+    ${m.bracket_run ? `<span><b>bracket</b> run ${m.bracket_run} · ${(m.bracket_draws||0).toLocaleString()} fixed-entrant draws</span>` : ""}
     <span><b>honesty</b> near-peer pro series sit close to coin flips — treat every edge here as thin and hard-won</span>
     <span><b>data</b> match data via OpenDota · team pages & ratings © Liquipedia contributors, <a href="https://liquipedia.net/dota2/Portal:Rankings">CC-BY-SA 3.0</a></span>`;
 }
 
-/* ---------- THE INTERNATIONAL section: period-2 fantasy preview ---------- */
-function cardT2(k, kind){ const c = DATA.cards[k+"|"+kind]; return (c && c.t2 && c.t2.length) ? c.t2 : null; }
+/* ---------- THE INTERNATIONAL section: period-2 fantasy board ---------- */
+function cardT2(k, kind){
+  const c = C2 ? C2[k+"|"+kind] : DATA.cards[k+"|"+kind];
+  return (c && c.t2 && c.t2.length) ? c.t2 : null;
+}
+function cardCell2(teamKey, kind){
+  const c = cardInfo2(teamKey, kind);
+  return `<td class="cardcell"><div class="t">${tlogo(teamKey,14)}${name[teamKey]}</div>
+    <div class="s">${(c.players||[]).join(", ")}</div>
+    <div class="s">${(c.stats||[]).map(s=>`<em>${s}</em>`).join(" · ")}${c.joint?"":' <span class="warn">thin</span>'}</div></td>`;
+}
+let SEL2 = null;               // P2 lab custom pick [si, ci, mi]
 function renderFantasy2(){
-  if (!BESTC2) BESTC2 = R.map(r=>{
+  if (!R2){    // pre-post-groups fallback: the old chained preview over all 16 teams
+    if (!BESTC2) BESTC2 = R.map(r=>{
+      const a = cardT2(keys[r[0]],"support"), b = cardT2(keys[r[1]],"core"), d = cardT2(keys[r[2]],"mid");
+      let bi = 0, bv = -1;
+      for (let c = 0; c < NP*NS; c++){
+        const v = (a?a[c]:0) + (b?b[c]:0) + (d?d[c]:0);
+        if (v > bv){ bv = v; bi = c; }
+      }
+      return [bi, bv];
+    });
+    const scored = R.map((r,i)=>({r, combo: BESTC2[i][0], evT: BESTC2[i][1] || r[6]}));
+    scored.sort((x,y)=>y.evT-x.evT);
+    $("#rtable2").innerHTML = `<tr><th></th><th>Support duo</th><th>Core duo</th><th>Mid</th>
+      <th style="text-align:right">EV·P2 titled</th><th style="text-align:right">EV·P1</th></tr>` +
+      scored.slice(0,12).map((x,i)=>{
+        const [si,ci,mi] = x.r;
+        return `<tr class="${i===0?"top1":""}"><td class="rk">${String(i+1).padStart(2,"0")}</td>
+          ${cardCell(keys[si],"support")}${cardCell(keys[ci],"core")}${cardCell(keys[mi],"mid")}
+          <td class="n hi">${Math.round(x.evT).toLocaleString()}<small style="display:block;color:var(--faint);font-size:9px;font-weight:400">${titleName(x.combo)}</small></td>
+          <td class="n">${x.r[3].toLocaleString()}</td></tr>`;
+      }).join("");
+    $("#fnote2").innerHTML = `Bracket picks open <b>Aug 17 01:00 UTC</b> · lock <b>Aug 20 02:00 UTC</b>. After groups complete, the daily refresh re-optimizes this board on the real entrants.`;
+    return;
+  }
+  // real post-groups board: 8 alive teams, 5-emblem banners, bracket-path exposure
+  if (!BESTC2) BESTC2 = R2.map(r=>{
     const a = cardT2(keys[r[0]],"support"), b = cardT2(keys[r[1]],"core"), d = cardT2(keys[r[2]],"mid");
     let bi = 0, bv = -1;
     for (let c = 0; c < NP*NS; c++){
@@ -1571,23 +1860,116 @@ function renderFantasy2(){
     }
     return [bi, bv];
   });
-  const scored = R.map((r,i)=>({r, combo: BESTC2[i][0], evT: BESTC2[i][1] || r[6]}));
-  scored.sort((x,y)=>y.evT-x.evT);
-  const top = scored.slice(0,12);
+  $("#f2tag").textContent = "decision-grade · real bracket";
+  $("#f2sub").innerHTML = `Re-optimized on the <b style="color:var(--ink)">real 8-team bracket</b> (run <span class="num">${DATA.meta.fantasy_run2||""}</span>): only alive teams, expected series per team follows each bracket path, and every card is priced under the <b style="color:var(--ink)">5-emblem main-event banners</b>. Your roster snapshot locks when P2 matches begin — <b style="color:var(--ink)">Aug 20 02:00 UTC</b> — and you get 30 fresh roll tokens. Coach titles: best pair per roster (AUTO).`;
+  const alive = [...new Set(R2.flatMap(r=>[r[0],r[1],r[2]]))].sort((a,b)=>a-b);
+  const scored = R2.map((r,i)=>({r, i, combo: BESTC2[i][0], evT: BESTC2[i][1] || r[3]}));
+  const ranked = [...scored].sort((x,y)=>y.evT-x.evT);
+  if (SEL2 && !ROWIX2.has(SEL2.join(","))) SEL2 = null;
+  const b = SEL2 ? scored[ROWIX2.get(SEL2.join(","))] : ranked[0];
+  const rank = ranked.indexOf(b) + 1;
+  // lab chips: 8 alive teams per role
+  const ROLE_TAG2 = ["SUP","CORE","MID"];
+  $("#rlab2box").hidden = false;
+  $("#rlab2").innerHTML = ROLE_LABEL.map((label,pos)=>
+    `<div class="rlabrow"><span class="rlbl">${label}</span><div class="rchips">` +
+    alive.map(ki=>{
+      const onHere = b.r[pos] === ki;
+      const elsewhere = [0,1,2].filter(p=>p!==pos && b.r[p]===ki);
+      const badge = elsewhere.length ? `<small class="urole">${elsewhere.map(p=>ROLE_TAG2[p]).join("+")}</small>` : "";
+      return `<button data-pos="${pos}" data-ki="${ki}" class="${onHere?"on":""}" title="${name[keys[ki]]}">${tlogo(keys[ki],13)}${tag[keys[ki]]}${badge}</button>`;
+    }).join("") + `</div></div>`).join("") +
+    `<div class="rlabfoot">${SEL2
+      ? `custom P2 roster · beats <b>${Math.round(100*(1-rank/R2.length))}%</b> of the ${R2.length} alive-team rosters<button id="rl2reset">↺ back to optimal</button>`
+      : `following the optimizer's best — click any team to explore`}</div>`;
+  // hero cards + expected series
+  const expOf = k => ((DATA.exposure||{})[k]||{}).p2;
+  const triTeams = [...new Set([b.r[0],b.r[1],b.r[2]])].map(ki=>keys[ki]);
+  const expLine = triTeams.map(k=>`${tag[k]} ${expOf(k)!=null?expOf(k).toFixed(1):"?"}`).join(" · ");
+  const hero2 = (kind, ki) => {
+    const k = keys[ki], c = cardInfo2(k, kind), t = cardT2(k, kind);
+    const tev = t ? t[b.combo] : null;
+    return `<div class="fcard"><div class="kind">${KIND_LABEL[kind]}</div>
+      <div class="team">${tlogo(k,18)}${name[k]}</div>
+      <div class="players">${(c.players||[]).join(" · ")}</div>
+      <div>${(c.stats||[]).map(s=>`<span class="tagchip">${s}</span>`).join("")}</div>
+      <div class="cev">card EV <b>${Math.round(c.ev2||0).toLocaleString()}</b>${tev?` · titled <b>${Math.round(tev).toLocaleString()}</b>`:""} pts · expected series <b>${expOf(k)!=null?expOf(k).toFixed(1):"—"}</b>${c.joint?"":' · <span class="warn">thin duo</span>'}</div>
+    </div>`;
+  };
+  $("#fhero2").innerHTML = hero2("support", b.r[0]) + hero2("core", b.r[1]) + hero2("mid", b.r[2]) +
+    `<div class="fcard sum"><div class="kind">${SEL2 ? "P2 roster line — your pick" : "P2 roster line — pick #1"}</div>
+      <div class="cev big">${Math.round(b.evT).toLocaleString()}</div>
+      <div class="cev">expected points, period 2, wearing <b>${titleName(b.combo)}</b></div>
+      <div class="cev">rank <b>#${rank}</b> of ${R2.length} alive-team rosters${rank>1?` · <b>−${Math.round(ranked[0].evT-b.evT).toLocaleString()}</b> EV vs best`:""}</div>
+      <div class="cev">untitled EV <b>${Math.round(b.r[3]).toLocaleString()}</b> · ceiling (q90) <b>${Math.round(b.r[5]).toLocaleString()}</b> · swing <b>±${Math.round(b.r[4]).toLocaleString()}</b></div>
+      <div class="cev">expected P2 series: <b>${expLine}</b> — deeper bracket runs = more shots at a best series</div></div>`;
   $("#rtable2").innerHTML = `<tr><th></th><th>Support duo</th><th>Core duo</th><th>Mid</th>
-    <th style="text-align:right" title="Expected period-2 points under the roster's best coach-title pair — includes each team's probability of reaching the main event at all">EV·P2 titled</th>
-    <th style="text-align:right" title="Group-stage EV for reference — the period-1 board may prefer a different roster">EV·P1</th></tr>` +
-    top.map((x,i)=>{
+    <th style="text-align:right" title="Expected period-2 points under the roster's best coach-title pair, on the real bracket with 5-emblem banners">EV·P2 titled</th>
+    <th style="text-align:right" title="Standard deviation of the period-2 score (untitled)">swing</th>
+    <th style="text-align:right" title="90th-percentile period-2 outcome (untitled)">ceiling</th></tr>` +
+    ranked.slice(0,12).map((x,i)=>{
       const [si,ci,mi] = x.r;
-      return `<tr class="${i===0?"top1":""}"><td class="rk">${String(i+1).padStart(2,"0")}</td>
-        ${cardCell(keys[si],"support")}${cardCell(keys[ci],"core")}${cardCell(keys[mi],"mid")}
+      return `<tr class="${i===0?"top1":""} ${x===b?"selr":""}"><td class="rk">${String(i+1).padStart(2,"0")}</td>
+        ${cardCell2(keys[si],"support")}${cardCell2(keys[ci],"core")}${cardCell2(keys[mi],"mid")}
         <td class="n hi">${Math.round(x.evT).toLocaleString()}<small style="display:block;color:var(--faint);font-size:9px;font-weight:400">${titleName(x.combo)}</small></td>
-        <td class="n">${x.r[3].toLocaleString()}</td></tr>`;
+        <td class="n">${Math.round(x.r[4]).toLocaleString()}</td>
+        <td class="n">${Math.round(x.r[5]).toLocaleString()}</td></tr>`;
     }).join("");
-  $("#fnote2").innerHTML = `Bracket picks open <b>Aug 17 01:00 UTC</b> · lock <b>Aug 20 02:00 UTC</b> (client compendium definition, league 19719). After groups complete: <span class="num">ti sim --stage post_groups --entrants …</span> then <span class="num">ti pick bracket</span> — this board and the Bracket tab re-optimize on the real entrants, seeding and fresh group-stage form.`;
+  $("#fnote2").innerHTML = `Ranked over all ${R2.length} alive-team triples (8³ ordered, repeats allowed) on the post-groups path set of run <span class="num">${DATA.meta.fantasy_run2||""}</span>. Card banks now include the group-stage games (recency-weighted ×1.5 current patch). P2 banner layouts (5 emblems, client-confirmed) let cards score five stats — green-heavy cores/supports gained the most. Roster snapshot at first P2 match (Aug 20 02:00 UTC, TI2025-precedent assumption).`;
+  // P2 banner forge for the selected roster
+  $("#bforge2panel").hidden = false;
+  renderForgeInto("#bforge2", "#bforge2note", [b.r[0], b.r[1], b.r[2]], cardInfo2,
+    `Your three group-stage emblems carry over into the five-slot banner — the P1-optimal stats are a subset of the P2 colors, so the recommendation reads as "keep your three, roll the two new slots toward the remaining targets" (30 fresh tokens). Trait advice covers all five slots; edge slots have one neighbor, inner slots two.`);
 }
+document.addEventListener("click", e=>{
+  if (e.target.closest("#rl2reset")){ SEL2 = null; renderFantasy2(); return; }
+  const btn = e.target.closest("#rlab2 button[data-pos]");
+  if (!btn) return;
+  const pos = +btn.dataset.pos, ki = +btn.dataset.ki;
+  const baseTriple = SEL2 ? [...SEL2] : (function(){
+    // current displayed triple = optimal when no custom pick
+    const scored = R2.map((r,i)=>({r, evT: (BESTC2 && BESTC2[i] && BESTC2[i][1]) || r[3]}));
+    const best = scored.reduce((a,x)=>x.evT>a.evT?x:a, scored[0]);
+    return [best.r[0], best.r[1], best.r[2]];
+  })();
+  if (baseTriple[pos] === ki) return;
+  baseTriple[pos] = ki;
+  SEL2 = baseTriple;
+  renderFantasy2();
+});
 renderFantasy2();
 renderFantasy(+$("#frisk").value);   // refresh P1 board now that titled-P2 cache exists
+
+/* ---------- P1 actuals: who really performed in groups ---------- */
+{
+  const PA = DATA.p1_actuals;
+  if (PA){
+    $("#p1actuals").hidden = false;
+    if (POST) $("#p1tag").textContent = "archived · locked Aug 13";
+    const rows = Object.entries(PA).map(([acc, v])=>({acc:+acc, g:v[0], tot:v[1], avg:v[2],
+      best:v[3], p: ROSTER.players[+acc]})).filter(x=>x.p);
+    const kindOf = s => s==="support" ? "support" : (s==="mid" ? "mid" : "core");
+    const groups = [["support","Supports"],["core","Cores · safe + off"],["mid","Mids"]];
+    $("#p1lead").innerHTML = groups.map(([kind,label])=>{
+      const rs = rows.filter(x=>kindOf(x.p.slot)===kind).sort((a,b)=>b.tot-a.tot).slice(0,8);
+      if (!rs.length) return "";
+      const mx = rs[0].tot;
+      return `<div><h2 style="font-size:11px">${label}</h2>` + rs.map(x=>
+        `<div class="row" style="grid-template-columns:150px 1fr 128px"
+            title="${x.g} games · avg ${x.avg.toLocaleString()}/game · best series ${x.best.toLocaleString()}">
+          <span class="tm">${tlogo(x.p.team,14)}${x.p.nick}</span>
+          <span class="track"><i class="fill" style="width:${Math.max(3,100*x.tot/mx)}%"></i></span>
+          <span class="pct">${x.tot.toLocaleString()}<small style="color:var(--faint)"> · bs ${x.best.toLocaleString()}</small></span>
+        </div>`).join("") + `</div>`;
+    }).join("");
+    const all = [...rows].sort((a,b)=>b.tot-a.tot);
+    if (all.length){
+      const mvp = all[0];
+      const bestBs = [...rows].sort((a,b)=>b.best-a.best)[0];
+      $("#p1leadnote").innerHTML = `Raw-output MVP: <b style="color:var(--aegis-hi)">${mvp.p.nick}</b> (${name[mvp.p.team]}) — ${mvp.tot.toLocaleString()} pts over ${mvp.g} games. Biggest single series: <b style="color:var(--aegis-hi)">${bestBs.p.nick}</b> at ${bestBs.best.toLocaleString()}. These totals feed the P2 card banks with a fresh-form premium.`;
+    }
+  }
+}
 
 /* ---------- GROUP STAGE section: 16×6 bucket-odds matrix ---------- */
 {
@@ -1637,6 +2019,15 @@ renderFantasy(+$("#frisk").value);   // refresh P1 board now that titled-P2 cach
     keys.forEach((k, t) => { if (gs.picks[k] != null) OPT[t] = bIdx[gs.picks[k]]; });
   }
   const EV_OPT = labScore(OPT)[0];
+  const ACTI = (() => {                              // real outcome as indices (post-groups)
+    const ab = (DATA.actuals || {}).buckets;
+    if (!ab) return null;
+    const a = new Int8Array(16).fill(-1);
+    const bIdx = {};
+    BKTS.forEach((b, i) => { bIdx[b.id] = i; });
+    keys.forEach((k, t) => { if (ab[k] != null) a[t] = bIdx[ab[k]]; });
+    return a;
+  })();
 
   const remainingByBucket = b => keys
     .map((k, t) => [t, (BM[k] || [])[b] || 0])
@@ -1687,7 +2078,12 @@ renderFantasy(+$("#frisk").value);   // refresh P1 board now that titled-P2 cach
       <div class="stat"><div class="lbl">E[correct]</div><div class="val">${ek.toFixed(2)}</div></div>` +
       (placedN === 16
         ? `<div class="stat" title="EV gap vs the optimizer's MAX EV slate, both scored on the same draws"><div class="lbl">vs optimal</div><div class="val" style="${dev>0.02?"color:var(--dire)":"color:var(--radiant)"}">−${(100*dev).toFixed(1)}%</div></div>`
-        : `<div class="stat"><div class="lbl">vs optimal</div><div class="val"><small>place all 16 to compare</small></div></div>`);
+        : `<div class="stat"><div class="lbl">vs optimal</div><div class="val"><small>place all 16 to compare</small></div></div>`) +
+      (ACTI ? (() => {
+        let n = 0;
+        for (let t = 0; t < 16; t++) if (LAB[t] >= 0 && LAB[t] === ACTI[t]) n++;
+        return `<div class="stat" style="border-color:var(--aegis-dim)" title="scored against the real group-stage outcome — what this hand slate would have earned"><div class="lbl">vs actual</div><div class="val">${n}<small> /16 → ${Math.round(TBL[n]).toLocaleString()} pts</small></div></div>`;
+      })() : "");
     $("#labfeed").innerHTML = FEED;
   }
 

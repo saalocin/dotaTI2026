@@ -80,6 +80,96 @@ def _topology():
     ]
 
 
+def test_score_slate_hand_case():
+    actuals = {"a": "4-0", "b": "4-1", "c": "elim-victor", "d": "0-4"}
+    picks_all = dict(actuals)
+    assert slates.score_slate(picks_all, actuals) == (4, 360.0)
+    picks_one = {"a": "4-0", "b": "elim-loser", "c": "1-4", "d": "4-1"}
+    assert slates.score_slate(picks_one, actuals) == (1, 30.0)
+    # the real Aug-6 MAX EV slate vs the real TI2026 outcome: 7 correct -> 1,800
+    actual_ti = {"vision": "4-0", "liquid": "4-1", "nigma": "4-1",
+                 "yandex": "elim-victor", "falcons": "elim-victor",
+                 "boomboys": "elim-victor", "spirit": "elim-victor",
+                 "iron_wing": "elim-victor",
+                 "lgd": "elim-loser", "vici": "elim-loser", "aurora": "elim-loser",
+                 "resilience": "elim-loser", "gamerlegion": "elim-loser",
+                 "xtreme": "1-4", "og": "1-4", "huligani": "0-4"}
+    maxev = {"aurora": "elim-victor", "boomboys": "4-1", "falcons": "elim-victor",
+             "gamerlegion": "0-4", "huligani": "1-4", "iron_wing": "elim-victor",
+             "lgd": "elim-loser", "liquid": "elim-victor", "nigma": "elim-loser",
+             "og": "1-4", "resilience": "elim-loser", "spirit": "elim-victor",
+             "vici": "elim-loser", "vision": "4-1", "xtreme": "elim-loser",
+             "yandex": "4-0"}
+    assert slates.score_slate(maxev, actual_ti) == (7, 1800.0)
+
+
+def test_actual_buckets_synthetic_group_stage():
+    """actual_buckets derives the six real buckets from completed series alone."""
+    import duckdb
+
+    records = {"vision": (4, 0), "liquid": (4, 1), "nigma": (4, 1),
+               "spirit": (3, 2), "iron_wing": (3, 2), "falcons": (3, 2),
+               "aurora": (3, 2), "lgd": (3, 2),
+               "boomboys": (2, 3), "vici": (2, 3), "yandex": (2, 3),
+               "resilience": (2, 3), "gamerlegion": (2, 3),
+               "xtreme": (1, 4), "og": (1, 4), "huligani": (0, 4)}
+    win_bag, loss_bag = [], []
+    by_wins = sorted(records, key=lambda t: -records[t][0])
+    for t in by_wins:
+        win_bag += [t] * records[t][0]
+    for t in sorted(records, key=lambda t: -records[t][0]):
+        loss_bag += [t] * records[t][1]
+    assert len(win_bag) == len(loss_bag) == 39
+    swiss = list(zip(win_bag, loss_bag))
+    assert all(w != l_ for w, l_ in swiss)          # construction avoids self-pairs
+    elim = [("yandex", "lgd"), ("falcons", "vici"), ("boomboys", "aurora"),
+            ("spirit", "resilience"), ("iron_wing", "gamerlegion")]
+
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA pred")
+    con.execute("""CREATE TABLE pred.series (
+        series_id VARCHAR, stage VARCHAR, team1_key VARCHAR, team2_key VARCHAR,
+        winner_key VARCHAR, completed BOOLEAN)""")
+    con.execute("""CREATE TABLE pred.swiss_standings (
+        snapshot_ts TIMESTAMP, team_key VARCHAR, wins INT, losses INT)""")
+    for i, (w, l_) in enumerate(swiss):
+        con.execute("INSERT INTO pred.series VALUES (?,?,?,?,?,TRUE)",
+                    [f"s{i}", "group_swiss", w, l_, w])
+    for i, (w, l_) in enumerate(elim):
+        con.execute("INSERT INTO pred.series VALUES (?,?,?,?,?,TRUE)",
+                    [f"e{i}", "group_elim", w, l_, w])
+    for t, (w, l_) in records.items():
+        con.execute("INSERT INTO pred.swiss_standings VALUES (TIMESTAMP '2026-08-17', ?, ?, ?)",
+                    [t, w, l_])
+
+    out = slates.actual_buckets(con)
+    assert out is not None
+    assert out["vision"] == "4-0" and out["huligani"] == "0-4"
+    assert {out["liquid"], out["nigma"]} == {"4-1"}
+    assert all(out[t] == "elim-victor" for t, _ in elim)
+    assert all(out[l_] == "elim-loser" for _, l_ in elim)
+    assert {out["xtreme"], out["og"]} == {"1-4"}
+    from collections import Counter
+    assert Counter(out.values()) == Counter(
+        {"elim-victor": 5, "elim-loser": 5, "4-1": 2, "1-4": 2, "4-0": 1, "0-4": 1})
+
+    # a standings/series contradiction must raise, not pass silently
+    con.execute("UPDATE pred.swiss_standings SET wins = 3, losses = 1 WHERE team_key = 'vision'")
+    with pytest.raises(AssertionError):
+        slates.actual_buckets(con)
+
+    # incomplete group stage -> None
+    con2 = duckdb.connect()
+    con2.execute("CREATE SCHEMA pred")
+    con2.execute("""CREATE TABLE pred.series (
+        series_id VARCHAR, stage VARCHAR, team1_key VARCHAR, team2_key VARCHAR,
+        winner_key VARCHAR, completed BOOLEAN)""")
+    con2.execute("""CREATE TABLE pred.swiss_standings (
+        snapshot_ts TIMESTAMP, team_key VARCHAR, wins INT, losses INT)""")
+    con2.execute("INSERT INTO pred.series VALUES ('s0','group_swiss','a','b','a',TRUE)")
+    assert slates.actual_buckets(con2) is None
+
+
 def test_bracket_core_exhaustive_finds_deterministic_truth():
     # deterministic draws: team i beats j for i < j; the optimum must predict the
     # exact realized bracket and score all 14 -> 12,000 EV

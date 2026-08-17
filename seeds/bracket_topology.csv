@@ -1,12 +1,12 @@
 slot_id,round_no,side,best_of,feeds_winner_slot,feeds_loser_slot,note
-R1M1,1,UB,3,R2M1,R1M5,UB QF; loser-drop pairing inferred — verify vs rendered bracket after Aug 16 seeding
+R1M1,1,UB,3,R2M1,R1M5,UB QF; loser-drop pairing VERIFIED vs completed TI2025 bracket (tests/test_liquipedia_html.py loser-feed test)
 R1M2,1,UB,3,R2M1,R1M5,UB QF
 R1M3,1,UB,3,R2M2,R1M6,UB QF
 R1M4,1,UB,3,R2M2,R1M6,UB QF
 R1M5,1,LB,3,R2M3,,LB Round 1 (UB QF losers)
 R1M6,1,LB,3,R2M4,,LB Round 1 (UB QF losers)
-R2M1,2,UB,3,R4M1,R2M3,UB SF; loser cross-pairing unverified
-R2M2,2,UB,3,R4M1,R2M4,UB SF
+R2M1,2,UB,3,R4M1,R2M4,UB SF; loser CROSSES to the other half's LB QF (verified on TI2025: SF1 loser met the R1M6 survivor)
+R2M2,2,UB,3,R4M1,R2M3,UB SF; loser crosses (see R2M1)
 R2M3,2,LB,3,R3M1,,LB QF
 R2M4,2,LB,3,R3M1,,LB QF
 R3M1,3,LB,3,R4M2,,LB SF
